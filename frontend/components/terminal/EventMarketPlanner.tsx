@@ -46,6 +46,7 @@ function formatPrice(value: number | null | undefined) {
 function formatEdgeCents(value: number | null | undefined) {
   if (value == null) return '--'
   const rounded = Math.round(value * 10) / 10
+  if (rounded === 0) return 'No edge'
   const sign = rounded > 0 ? '+' : ''
   return `${sign}${rounded}c`
 }

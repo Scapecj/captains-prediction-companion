@@ -3,7 +3,7 @@ import { resolveOpenRouterModel } from './modelDefaults.js';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const EDGE_THRESHOLD_CENTS = 3;
 const ALPHA_SYSTEM_PROMPT =
-  'You are the alpha stage for a prediction-market companion. Treat mention markets as resolution-constrained language problems. Use only the provided market data. Do not assume extra facts. Respect the exact phrase, exact speaker, exact event boundary, and exact source constraints from the rules summary. Return JSON only with keys fair_yes, confidence, reasoning, and watch_for. fair_yes must be a number from 0 to 1. confidence must be low, medium, or high. reasoning must be one short sentence. watch_for must be an array of up to three short strings. If the evidence is thin, stay close to the live market price and lower confidence.';
+  'You are the alpha stage for a prediction-market companion. Treat mention markets as resolution-constrained language problems. Use only the provided market data. Do not assume extra facts. Respect the exact phrase, exact speaker, exact event boundary, and exact source constraints from the rules summary. Return JSON only with keys fair_yes, confidence, reasoning, and watch_for. fair_yes must be a number from 0 to 1. confidence must be low, medium, or high. reasoning must be one short sentence. watch_for must be an array of up to three short strings. Do not use the live market price itself as evidence. If fair value is inside the no-bet band, say there is no actionable edge rather than implying certainty. watch_for items must be concrete monitoring hooks such as transcript release, exact-phrase confirmation, or excluded-segment risk, not names, tickers, or event titles.';
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -121,42 +121,53 @@ async function callOpenRouterAlpha(payload, options) {
 
   if (!apiKey || typeof fetchImpl !== 'function') return null;
 
-  try {
-    const response = await fetchImpl(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+  const requestBody = JSON.stringify({
+    model,
+    temperature: 0.1,
+    max_tokens: 400,
+    reasoning: {
+      effort: 'none',
+      exclude: true,
+    },
+    messages: [
+      {
+        role: 'system',
+        content: ALPHA_SYSTEM_PROMPT,
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        max_tokens: 400,
-        reasoning: {
-          effort: 'none',
-          exclude: true,
+      {
+        role: 'user',
+        content: JSON.stringify(payload),
+      },
+    ],
+  });
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetchImpl(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
         },
-        messages: [
-          {
-            role: 'system',
-            content: ALPHA_SYSTEM_PROMPT,
-          },
-          {
-            role: 'user',
-            content: JSON.stringify(payload),
-          },
-        ],
-      }),
-    });
+        body: requestBody,
+      });
 
-    if (!response.ok) return null;
+      if (!response.ok) {
+        continue;
+      }
 
-    const data = await response.json();
-    const content = extractMessageText(data?.choices?.[0]?.message?.content);
-    return parseJsonResponse(content);
-  } catch {
-    return null;
+      const data = await response.json();
+      const content = extractMessageText(data?.choices?.[0]?.message?.content);
+      const parsed = parseJsonResponse(content);
+      if (parsed) {
+        return parsed;
+      }
+    } catch {
+      // Retry once on transient network/provider failures.
+    }
   }
+
+  return null;
 }
 
 export async function enrichEventMarketAlpha(input = {}, options = {}) {

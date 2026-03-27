@@ -598,6 +598,7 @@ function buildUserFacingHeadline(status, marketType, eventType, input, marketVie
 
 function buildUserFacingReason(status, marketType, input, marketView) {
   const alphaReason = metadataValue(input.metadata ?? {}, 'alpha_summary_reason');
+  const edgeCents = metadataValue(input.metadata ?? {}, 'edge_cents');
   if (status === 'market_unmapped') {
     return 'The market type is not supported by the current event-market card.';
   }
@@ -611,6 +612,9 @@ function buildUserFacingReason(status, marketType, input, marketView) {
     return 'The contract has live Kalshi prices, but the alpha pipeline has not produced fair value or edge yet.';
   }
   if (status === 'ready' && marketType === 'mention') {
+    if (marketView?.trade_view?.best_side === 'watch' && edgeCents === 0) {
+      return 'Alpha fair value sits inside the no-bet band, so the card stays on watch until the live price moves or new evidence appears.';
+    }
     return (
       alphaReason ??
       (marketView?.trade_view?.best_side === 'watch'
