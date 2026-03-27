@@ -1,0 +1,293 @@
+"""Pipeline status and control endpoints."""
+
+import json
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel, Field
+
+from core.event_markets import (
+    EventMarketContext,
+    build_event_market_output_spec,
+    build_event_market_pipeline,
+    build_event_market_workflow_spec,
+)
+from core.model_defaults import get_pipeline_model_defaults
+from core.paths import DATA_DIR
+
+router = APIRouter()
+
+# Paths
+MANIFEST_PATH = DATA_DIR / "manifest.json"
+
+# Pipeline state
+_running_pipeline: dict[str, Any] | None = None
+_step_tracker: Any = None  # StepTracker instance during pipeline run
+
+
+class ProductionRunRequest(BaseModel):
+    """Request to run production pipeline."""
+
+    full: bool = False  # If True, reset and reprocess all
+    max_events: int | None = Field(
+        default=None, gt=0, description="Limit number of events fetched (must be > 0)"
+    )
+    implications_model: str | None = Field(
+        default=None, max_length=200, description="Override LLM model for implications extraction"
+    )
+    validation_model: str | None = Field(
+        default=None, max_length=200, description="Override LLM model for validation"
+    )
+
+
+class EventMarketPlanRequest(BaseModel):
+    """Request to build the reusable event-market research plan."""
+
+    venue: str = Field(
+        default="Kalshi",
+        max_length=100,
+        description="Market venue or exchange name",
+    )
+    domain: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Domain label such as sports, politics, macro, earnings, or mention",
+    )
+    market_id: str | None = Field(default=None, max_length=200)
+    title: str | None = Field(default=None, max_length=500)
+    question: str | None = Field(default=None, max_length=1000)
+    market_type: str | None = Field(default=None, max_length=100)
+    market_subtype: str | None = Field(default=None, max_length=100)
+    url: str | None = Field(default=None, max_length=1000)
+    resolution_source: str | None = Field(default=None, max_length=200)
+    notes: str | None = Field(default=None, max_length=1000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+def load_manifest() -> dict:
+    """Load manifest file."""
+    if MANIFEST_PATH.exists():
+        return json.loads(MANIFEST_PATH.read_text())
+    return {}
+
+
+def get_step_info() -> list[dict[str, Any]]:
+    """Get info about all pipeline steps.
+
+    Note: Returns empty list as CLI was simplified and script registry removed.
+    Step progress is now tracked via production pipeline state instead.
+    """
+    return []
+
+
+@router.get("/status")
+async def get_status() -> dict[str, Any]:
+    """Get pipeline status including latest runs for each step."""
+    manifest = load_manifest()
+    steps = get_step_info()
+
+    # Get production pipeline state
+    try:
+        from core.state import load_state
+
+        state = load_state()
+        stats = state.get_stats()
+        last_run = state.get_last_run()
+        state.close()
+        production_state = {
+            "total_groups": stats.total_groups,
+            "total_implications": stats.total_implications,
+            "total_validated_pairs": stats.total_validated_pairs,
+            "total_portfolios": stats.total_portfolios,
+            "last_full_run": stats.last_full_run,
+            "last_refresh": stats.last_refresh,
+            "last_run": last_run,
+        }
+    except Exception:
+        production_state = None
+
+    is_running = (
+        _running_pipeline is not None and _running_pipeline.get("status") == "running"
+    )
+
+    # Get step progress from tracker (or final state if completed)
+    step_progress = None
+    if is_running and _step_tracker is not None:
+        step_progress = _step_tracker.get_state()
+    elif _running_pipeline and "final_step_progress" in _running_pipeline:
+        step_progress = _running_pipeline["final_step_progress"]
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "running": is_running,
+        "current_step": _running_pipeline.get("step") if is_running else None,
+        "production": production_state,
+        "steps": steps,
+        "manifest": manifest,
+        "step_progress": step_progress,
+        "default_models": get_pipeline_model_defaults(),
+    }
+
+
+@router.post("/event-markets/plan")
+async def build_event_market_plan(
+    request: EventMarketPlanRequest,
+) -> dict[str, Any]:
+    """Build the reusable Kalshi -> Perplexity -> scraper plan."""
+    metadata = dict(request.metadata)
+    if request.notes:
+        metadata.setdefault("notes", request.notes)
+
+    context = EventMarketContext(
+        venue=request.venue,
+        market_id=request.market_id,
+        title=request.title,
+        question=request.question,
+        domain=request.domain,
+        market_type=request.market_type,
+        market_subtype=request.market_subtype,
+        url=request.url,
+        resolution_source=request.resolution_source,
+        metadata=metadata,
+    )
+    plan = build_event_market_pipeline(context)
+    workflow = build_event_market_workflow_spec(context, plan)
+    output_contract = build_event_market_output_spec()
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "plan": plan.to_dict(),
+        "workflow": workflow.to_dict(),
+        "output_contract": output_contract.to_dict(),
+    }
+
+
+# =============================================================================
+# PRODUCTION PIPELINE ENDPOINTS
+# =============================================================================
+
+
+def run_production_pipeline_task(
+    full: bool,
+    max_events: int | None = None,
+    implications_model: str | None = None,
+    validation_model: str | None = None,
+):
+    """Background task to run the production pipeline."""
+    global _running_pipeline, _step_tracker
+
+    try:
+        # Create step tracker for progress monitoring
+        from core.step_tracker import StepTracker
+
+        _step_tracker = StepTracker()
+
+        # Demo mode (max_events set) always runs as full reset to ensure fresh state
+        # This allows running demo multiple times without stale data
+        is_demo = max_events is not None
+        effective_full = full or is_demo
+
+        mode = "demo" if is_demo else ("full" if full else "incremental")
+        _running_pipeline = {
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "pipeline_type": "production",
+            "mode": mode,
+            "max_events": max_events,
+            "status": "running",
+        }
+
+        from core.runner import run
+
+        result = run(
+            full=effective_full,
+            step_tracker=_step_tracker,
+            max_events=max_events,
+            implications_model=implications_model,
+            validation_model=validation_model,
+        )
+
+        _running_pipeline["status"] = "completed"
+        _running_pipeline["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _running_pipeline["result"] = result
+
+    except Exception as e:
+        if _running_pipeline:
+            _running_pipeline["status"] = "error"
+            _running_pipeline["error"] = str(e)
+            _running_pipeline["completed_at"] = datetime.now(timezone.utc).isoformat()
+    finally:
+        # Preserve final step progress for frontend before clearing tracker
+        if _step_tracker and _running_pipeline:
+            _running_pipeline["final_step_progress"] = _step_tracker.get_state()
+        _step_tracker = None
+
+
+@router.post("/run/production")
+async def run_production(
+    request: ProductionRunRequest,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    """
+    Trigger the production pipeline.
+
+    Modes:
+    - Demo (max_events set): Always resets state first, fetches limited events
+    - Full (full=True): Resets state and reprocesses all events
+    - Incremental (default): Only processes new events not yet in state
+
+    Args:
+        request.full: If True, reset state and reprocess all events
+        request.max_events: Limit events fetched (enables demo mode, always resets)
+    """
+    global _running_pipeline
+
+    if _running_pipeline and _running_pipeline.get("status") == "running":
+        raise HTTPException(
+            status_code=409,
+            detail="Pipeline is already running",
+        )
+
+    # Start pipeline in background
+    background_tasks.add_task(
+        run_production_pipeline_task,
+        request.full,
+        request.max_events,
+        request.implications_model,
+        request.validation_model,
+    )
+
+    mode = "demo" if request.max_events else ("full" if request.full else "incremental")
+    return {
+        "status": "started",
+        "pipeline_type": "production",
+        "mode": mode,
+        "max_events": request.max_events,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.post("/reset")
+async def reset_production_state() -> dict[str, Any]:
+    """Reset the production pipeline state (clear all accumulated data)."""
+    global _running_pipeline
+
+    if _running_pipeline and _running_pipeline.get("status") == "running":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot reset while pipeline is running",
+        )
+
+    try:
+        from core.state import load_state
+
+        state = load_state()
+        state.reset()
+        state.close()
+
+        return {
+            "status": "reset",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "message": "Production pipeline state has been reset",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
