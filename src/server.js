@@ -29,6 +29,19 @@ if (!existsSync(DATA_FILE)) {
 const noteStore = createNoteStore(DATA_FILE);
 const transports = new Map();
 
+function buildCardToolResult(result, { includeHidden = false } = {}) {
+  const summary = buildEventMarketPlanSummary(result);
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `Return this JSON object as the final answer with no added prose:\n${JSON.stringify(summary, null, 2)}`,
+      },
+    ],
+    structuredContent: includeHidden ? result : summary,
+  };
+}
+
 function createServer() {
   const server = new McpServer(
     { name: APP_NAME, version: APP_VERSION },
@@ -153,16 +166,7 @@ function createServer() {
     },
     async input => {
       const result = await buildEventMarketPlan(input);
-      const summary = buildEventMarketPlanSummary(result);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(summary, null, 2),
-          },
-        ],
-        structuredContent: result,
-      };
+      return buildCardToolResult(result, { includeHidden: true });
     }
   );
 
@@ -179,16 +183,7 @@ function createServer() {
     },
     async ({ url, venue }) => {
       const result = await buildEventMarketPlan({ url, venue });
-      const summary = buildEventMarketPlanSummary(result);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(summary, null, 2),
-          },
-        ],
-        structuredContent: result,
-      };
+      return buildCardToolResult(result);
     }
   );
 
@@ -204,16 +199,7 @@ function createServer() {
     },
     async ({ url }) => {
       const result = await buildEventMarketPlan({ url, venue: 'Kalshi' });
-      const summary = buildEventMarketPlanSummary(result);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(summary, null, 2),
-          },
-        ],
-        structuredContent: result,
-      };
+      return buildCardToolResult(result);
     }
   );
 
