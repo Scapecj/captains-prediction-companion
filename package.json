@@ -1,0 +1,20 @@
+{
+  "name": "captains-prediction-companion",
+  "version": "1.0.0",
+  "description": "ChatGPT-first prediction companion powered by a remote MCP server, with room to grow into a dashboard.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check:skills": "node scripts/check-skills-compatibility.js",
+    "test": "node --test"
+  },
+  "keywords": [],
+  "author": "OpenAI",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "zod": "^4.3.6"
+  }
+}
