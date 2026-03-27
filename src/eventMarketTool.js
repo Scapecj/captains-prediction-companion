@@ -1,9 +1,11 @@
 import { buildEventMarketContract } from './eventMarketContract.js';
 import { enrichEventMarketInput } from './kalshiApi.js';
+import { enrichEventMarketAlpha } from './eventMarketAlpha.js';
 
 export async function buildEventMarketPlan(input = {}, options = {}) {
   const enrichedInput = await enrichEventMarketInput(input, options);
-  return buildEventMarketContract(enrichedInput);
+  const alphaInput = await enrichEventMarketAlpha(enrichedInput, options);
+  return buildEventMarketContract(alphaInput);
 }
 
 function getAvailableContracts(summary = {}) {

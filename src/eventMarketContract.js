@@ -252,10 +252,19 @@ function metadataValue(metadata, ...keys) {
   return null;
 }
 
+function normalizeConfidence(value) {
+  if (typeof value !== 'string') return null;
+  const lowered = value.trim().toLowerCase();
+  if (lowered === 'low' || lowered === 'medium' || lowered === 'high') {
+    return lowered;
+  }
+  return null;
+}
+
 function priceThresholdRecommendation(marketStatus, marketYes, fairYes, edgeCents) {
   if (marketStatus && marketStatus !== 'active') return 'pass';
   if (marketYes == null || fairYes == null || edgeCents == null) return 'watch';
-  if (edgeCents <= 0) return 'pass';
+  if (Math.abs(edgeCents) < 3) return 'watch';
   return fairYes > marketYes ? 'buy_yes' : 'buy_no';
 }
 
@@ -547,7 +556,7 @@ function buildUserFacingRecommendation(marketType, status, marketView) {
   return status === 'needs_pricing' ? 'watch' : 'pass';
 }
 
-function buildUserFacingHeadline(status, marketType, eventType, input) {
+function buildUserFacingHeadline(status, marketType, eventType, input, marketView) {
   if (status === 'market_unmapped') {
     return 'The market needs a manual classification pass before the app can price it.';
   }
@@ -561,6 +570,9 @@ function buildUserFacingHeadline(status, marketType, eventType, input) {
     return 'The mention contract is mapped and live-priced, but the alpha pipeline has not set fair value yet.';
   }
   if (status === 'ready' && marketType === 'mention') {
+    if (marketView?.trade_view?.best_side === 'watch') {
+      return 'The alpha pipeline priced the mention contract, but the edge is too thin to act.';
+    }
     return 'The mention contract is priced and the alpha pipeline has a directional edge.';
   }
   if (marketType === 'mention') {
@@ -584,7 +596,8 @@ function buildUserFacingHeadline(status, marketType, eventType, input) {
   return 'The event market is classified and ready for pricing.';
 }
 
-function buildUserFacingReason(status, marketType) {
+function buildUserFacingReason(status, marketType, input, marketView) {
+  const alphaReason = metadataValue(input.metadata ?? {}, 'alpha_summary_reason');
   if (status === 'market_unmapped') {
     return 'The market type is not supported by the current event-market card.';
   }
@@ -598,7 +611,12 @@ function buildUserFacingReason(status, marketType) {
     return 'The contract has live Kalshi prices, but the alpha pipeline has not produced fair value or edge yet.';
   }
   if (status === 'ready' && marketType === 'mention') {
-    return 'The alpha pipeline has loaded the exact phrase, rules summary, and computed edge for this contract.';
+    return (
+      alphaReason ??
+      (marketView?.trade_view?.best_side === 'watch'
+        ? 'The alpha pipeline priced the contract, but the current edge is too small to act on.'
+        : 'The alpha pipeline has loaded the exact phrase, rules summary, and computed edge for this contract.')
+    );
   }
   if (marketType === 'mention') {
     return 'The phrase path is mapped, but exact pricing and edge still need to be computed.';
@@ -626,6 +644,9 @@ function buildUserFacingCard(input, plan) {
   const marketView = buildUserFacingMarketView(input, marketType, eventType);
   const status = buildUserFacingStatus(eventType, marketType, marketView);
   const recommendation = buildUserFacingRecommendation(marketType, status, marketView);
+  const confidence =
+    normalizeConfidence(metadataValue(input.metadata ?? {}, 'alpha_confidence')) ??
+    (status === 'ready' || status === 'needs_pricing' ? 'medium' : 'low');
 
   return {
     source: {
@@ -637,11 +658,11 @@ function buildUserFacingCard(input, plan) {
     event_type: eventType,
     market_type: marketType,
     status,
-    confidence: status === 'ready' || status === 'needs_pricing' ? 'medium' : 'low',
+    confidence,
     summary: {
-      headline: buildUserFacingHeadline(status, marketType, eventType, input),
+      headline: buildUserFacingHeadline(status, marketType, eventType, input, marketView),
       recommendation,
-      one_line_reason: buildUserFacingReason(status, marketType),
+      one_line_reason: buildUserFacingReason(status, marketType, input, marketView),
     },
     next_action: buildUserFacingNextAction(status, marketType, eventType),
     context: buildUserFacingContext(input, eventType),

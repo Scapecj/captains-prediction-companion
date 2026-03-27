@@ -14,6 +14,9 @@ import {
 } from './eventMarketTool.js';
 import { buildEventMarketWorkflowPrompt } from './eventMarketPrompt.js';
 import { createNoteStore } from './noteStore.js';
+import { loadDotEnv } from './env.js';
+
+loadDotEnv();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

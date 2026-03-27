@@ -37,6 +37,25 @@ function createFetchStub(routeMap) {
   };
 }
 
+function createAlphaFetchStub(result, verifier) {
+  return async (url, init = {}) => {
+    const key = typeof url === 'string' ? url : url.toString();
+    assert.equal(key, 'https://openrouter.ai/api/v1/chat/completions');
+    assert.equal(init.method, 'POST');
+    const body = JSON.parse(init.body);
+    verifier?.(body);
+    return jsonResponse({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(result),
+          },
+        },
+      ],
+    });
+  };
+}
+
 function buildTrumpEventPayload() {
   return {
     event: {
@@ -322,6 +341,117 @@ test('event market tool enriches a specific Kalshi contract from the url tail', 
   assert.equal(result.user_facing.market_view.target_phrase, 'Tariff');
   assert.equal(result.user_facing.market_view.trade_view.market_ticker, 'KXTRUMPMENTIONB-26MAR27-TARI');
   assert.equal(result.user_facing.market_view.trade_view.market_yes, 0.63);
+});
+
+test('event market alpha computes fair value and a directional side for a specific contract', async () => {
+  const eventPayload = buildTrumpEventPayload();
+  const marketPayload = {
+    market: {
+      ...eventPayload.markets[0],
+      event_ticker: 'KXTRUMPMENTIONB-26MAR27',
+      rules_secondary: 'Video of the remarks will be used as the primary settlement source.',
+    },
+  };
+  const orderbookPayload = {
+    orderbook_fp: {
+      yes_dollars: [
+        [0.86, 100],
+        [0.87, 50],
+      ],
+      no_dollars: [[0.18, 40]],
+    },
+  };
+  const fetchImpl = createFetchStub(
+    new Map([
+      [`${KALSHI_BASE_URL}/markets/KXTRUMPMENTIONB-26MAR27-BIDE`, marketPayload],
+      [`${KALSHI_BASE_URL}/markets/KXTRUMPMENTIONB-26MAR27-BIDE/orderbook`, orderbookPayload],
+      [`${KALSHI_BASE_URL}/events/KXTRUMPMENTIONB-26MAR27`, eventPayload],
+    ])
+  );
+  const alphaFetchImpl = createAlphaFetchStub(
+    {
+      fair_yes: 0.92,
+      confidence: 'high',
+      reasoning: 'Biden is a likely attack line in this remarks format.',
+      watch_for: ['alternate wording', 'segment exclusions'],
+    },
+    body => {
+      assert.equal(body.model, 'openrouter/free');
+      assert.match(body.messages[1].content, /"target_phrase":"Biden"/);
+      assert.match(body.messages[1].content, /"market_yes":0\.84/);
+    }
+  );
+
+  const result = await buildEventMarketPlan(
+    {
+      venue: 'Kalshi',
+      market_id: 'KXTRUMPMENTIONB-26MAR27-BIDE',
+      url: TRUMP_EVENT_URL,
+    },
+    { fetchImpl, alphaFetchImpl, alphaApiKey: 'test-key' }
+  );
+
+  assert.equal(result.user_facing.status, 'ready');
+  assert.equal(result.user_facing.confidence, 'high');
+  assert.equal(result.user_facing.summary.recommendation, 'buy_yes');
+  assert.equal(
+    result.user_facing.summary.one_line_reason,
+    'Biden is a likely attack line in this remarks format.'
+  );
+  assert.equal(result.user_facing.market_view.trade_view.market_yes, 0.84);
+  assert.equal(result.user_facing.market_view.trade_view.fair_yes, 0.92);
+  assert.equal(result.user_facing.market_view.trade_view.edge_cents, 8);
+  assert.deepEqual(result.user_facing.market_view.watch_for, [
+    'alternate wording',
+    'segment exclusions',
+  ]);
+});
+
+test('event market alpha falls back cleanly when the model call fails', async () => {
+  const eventPayload = buildTrumpEventPayload();
+  const marketPayload = {
+    market: {
+      ...eventPayload.markets[0],
+      event_ticker: 'KXTRUMPMENTIONB-26MAR27',
+      rules_secondary: 'Video of the remarks will be used as the primary settlement source.',
+    },
+  };
+  const orderbookPayload = {
+    orderbook_fp: {
+      yes_dollars: [
+        [0.86, 100],
+        [0.87, 50],
+      ],
+      no_dollars: [[0.18, 40]],
+    },
+  };
+  const fetchImpl = createFetchStub(
+    new Map([
+      [`${KALSHI_BASE_URL}/markets/KXTRUMPMENTIONB-26MAR27-BIDE`, marketPayload],
+      [`${KALSHI_BASE_URL}/markets/KXTRUMPMENTIONB-26MAR27-BIDE/orderbook`, orderbookPayload],
+      [`${KALSHI_BASE_URL}/events/KXTRUMPMENTIONB-26MAR27`, eventPayload],
+    ])
+  );
+
+  const result = await buildEventMarketPlan(
+    {
+      venue: 'Kalshi',
+      market_id: 'KXTRUMPMENTIONB-26MAR27-BIDE',
+      url: TRUMP_EVENT_URL,
+    },
+    {
+      fetchImpl,
+      alphaApiKey: 'test-key',
+      alphaFetchImpl: async () => {
+        throw new Error('network down');
+      },
+    }
+  );
+
+  assert.equal(result.user_facing.status, 'needs_pricing');
+  assert.equal(result.user_facing.summary.recommendation, 'watch');
+  assert.equal(result.user_facing.market_view.trade_view.fair_yes, null);
+  assert.equal(result.user_facing.market_view.trade_view.edge_cents, null);
 });
 
 test('generic trump mention board url still classifies as a mention market', async () => {

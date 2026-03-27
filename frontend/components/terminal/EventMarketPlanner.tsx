@@ -43,6 +43,13 @@ function formatPrice(value: number | null | undefined) {
   return `${Math.round(value * 100)}c`
 }
 
+function formatEdgeCents(value: number | null | undefined) {
+  if (value == null) return '--'
+  const rounded = Math.round(value * 10) / 10
+  const sign = rounded > 0 ? '+' : ''
+  return `${sign}${rounded}c`
+}
+
 function recommendationTone(recommendation: string) {
   switch (recommendation) {
     case 'buy_yes':
@@ -519,7 +526,7 @@ export function EventMarketPlanner() {
                 {card.summary.one_line_reason}
               </p>
 
-              <div className="mt-6 grid gap-4 border-t border-border pt-4 md:grid-cols-4">
+              <div className="mt-6 grid gap-4 border-t border-border pt-4 md:grid-cols-6">
                 <Metric
                   label="Platform"
                   value={card.source.platform}
@@ -537,6 +544,16 @@ export function EventMarketPlanner() {
                 <Metric
                   label="YES midpoint"
                   value={formatProbability(tradeView.market_yes)}
+                  emphasis
+                />
+                <Metric
+                  label="Fair YES"
+                  value={formatProbability(tradeView.fair_yes)}
+                  emphasis
+                />
+                <Metric
+                  label="Edge"
+                  value={formatEdgeCents(tradeView.edge_cents)}
                   emphasis
                 />
                 <Metric
@@ -666,6 +683,22 @@ export function EventMarketPlanner() {
                         </div>
                         <div className="mt-1 text-lg font-semibold text-text-primary">
                           {formatPrice(tradeView.last_price)}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-surface-elevated px-4 py-3">
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                          Fair YES
+                        </div>
+                        <div className="mt-1 text-lg font-semibold text-text-primary">
+                          {formatProbability(tradeView.fair_yes)}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-surface-elevated px-4 py-3">
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                          Edge
+                        </div>
+                        <div className="mt-1 text-lg font-semibold text-text-primary">
+                          {formatEdgeCents(tradeView.edge_cents)}
                         </div>
                       </div>
                     </div>
