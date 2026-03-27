@@ -377,6 +377,10 @@ test('event market alpha computes fair value and a directional side for a specif
     },
     body => {
       assert.equal(body.model, 'openrouter/free');
+      assert.deepEqual(body.reasoning, {
+        effort: 'none',
+        exclude: true,
+      });
       assert.match(body.messages[1].content, /"target_phrase":"Biden"/);
       assert.match(body.messages[1].content, /"market_yes":0\.84/);
     }

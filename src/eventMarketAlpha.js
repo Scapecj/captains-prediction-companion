@@ -131,7 +131,11 @@ async function callOpenRouterAlpha(payload, options) {
       body: JSON.stringify({
         model,
         temperature: 0.1,
-        max_tokens: 300,
+        max_tokens: 400,
+        reasoning: {
+          effort: 'none',
+          exclude: true,
+        },
         messages: [
           {
             role: 'system',
