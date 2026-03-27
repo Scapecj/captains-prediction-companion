@@ -135,7 +135,7 @@ function createServer() {
     'event_market_plan',
     {
       description:
-        'Build the reusable Kalshi -> Perplexity -> scraper workflow and output contract for an event market. When the user drops a Kalshi or supported market URL, run this tool immediately and do not wait for extra context.',
+        'Build the authoritative user-facing card plus hidden planning payload for a Kalshi or supported event market. When the user drops a market URL, run this tool immediately and do not wait for extra context. After the tool returns, the assistant should output only the user-facing card JSON and must not manually summarize the URL.',
       inputSchema: {
         venue: z.string().default('Kalshi').describe('Market venue or exchange name'),
         domain: z.string().optional().describe('Domain label such as sports, politics, macro, or mention'),

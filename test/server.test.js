@@ -323,7 +323,7 @@ test('event market prompt primes the backend plan workflow', () => {
 
   assert.equal(prompt.messages[0].role, 'system');
   assert.match(prompt.messages[0].content.text, /event_market_plan/);
-  assert.match(prompt.messages[0].content.text, /background only/);
-  assert.match(prompt.messages[0].content.text, /compact user-facing card/i);
+  assert.match(prompt.messages[0].content.text, /do not manually interpret/i);
+  assert.match(prompt.messages[0].content.text, /exactly the compact user-facing card json/i);
   assert.match(prompt.messages[1].content.text, /KX123/);
 });
