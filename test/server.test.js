@@ -4,7 +4,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNoteStore } from '../src/noteStore.js';
-import { buildEventMarketPlan, buildEventMarketPlanSummary } from '../src/eventMarketTool.js';
+import {
+  buildEventMarketPlan,
+  buildEventMarketPlanSummary,
+  buildFocusedKalshiMarketPlan,
+} from '../src/eventMarketTool.js';
 import { buildEventMarketWorkflowPrompt } from '../src/eventMarketPrompt.js';
 
 const TRUMP_EVENT_URL =
@@ -313,6 +317,46 @@ test('generic trump mention board url still classifies as a mention market', asy
   assert.equal(result.user_facing.context.speaker, 'Donald Trump');
   assert.equal(result.user_facing.context.event_name, 'Remarks at FII PRIORITY Summit');
   assert.equal(result.user_facing.market_view.available_contracts.length, 2);
+});
+
+test('focused kalshi market plan auto-selects the top contract from a board url', async () => {
+  const eventPayload = buildTrumpGenericEventPayload();
+  const focusTicker = 'KXTRUMPMENTION-26MAR27-CHIN';
+  const marketPayload = {
+    market: {
+      ...eventPayload.markets[0],
+      event_ticker: 'KXTRUMPMENTION-26MAR27',
+      rules_secondary: 'Video of the remarks will be used as the primary settlement source.',
+    },
+  };
+  const orderbookPayload = {
+    orderbook_fp: {
+      yes_dollars: [[0.78, 120]],
+      no_dollars: [[0.22, 80]],
+    },
+  };
+  const fetchImpl = createFetchStub(
+    new Map([
+      [`${KALSHI_BASE_URL}/events/KXTRUMPMENTION-26MAR27`, eventPayload],
+      [`${KALSHI_BASE_URL}/markets/${focusTicker}`, marketPayload],
+      [`${KALSHI_BASE_URL}/markets/${focusTicker}/orderbook`, orderbookPayload],
+    ])
+  );
+
+  const result = await buildFocusedKalshiMarketPlan(
+    {
+      venue: 'Kalshi',
+      url: TRUMP_GENERIC_EVENT_URL,
+    },
+    { fetchImpl }
+  );
+
+  assert.equal(result.user_facing.status, 'ready');
+  assert.equal(result.user_facing.summary.recommendation, 'watch');
+  assert.equal(result.user_facing.source.market_id, focusTicker);
+  assert.equal(result.user_facing.market_view.target_phrase, 'China');
+  assert.equal(result.user_facing.market_view.trade_view.market_ticker, focusTicker);
+  assert.equal(result.user_facing.market_view.trade_view.market_yes, 0.76);
 });
 
 test('event market tool routes earnings markets into the mention workflow', async () => {

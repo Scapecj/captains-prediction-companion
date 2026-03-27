@@ -7,7 +7,11 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as z from 'zod/v4';
-import { buildEventMarketPlan, buildEventMarketPlanSummary } from './eventMarketTool.js';
+import {
+  buildEventMarketPlan,
+  buildEventMarketPlanSummary,
+  buildFocusedKalshiMarketPlan,
+} from './eventMarketTool.js';
 import { buildEventMarketWorkflowPrompt } from './eventMarketPrompt.js';
 import { createNoteStore } from './noteStore.js';
 
@@ -156,7 +160,7 @@ function createServer() {
       },
     },
     async ({ url }) => {
-      const result = await buildEventMarketPlan({ url, venue: 'Kalshi' });
+      const result = await buildFocusedKalshiMarketPlan({ url, venue: 'Kalshi' });
       return buildCardToolResult(result);
     }
   );
