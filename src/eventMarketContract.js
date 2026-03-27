@@ -236,6 +236,14 @@ function metadataValue(metadata, ...keys) {
   return null;
 }
 
+function priceThresholdRecommendation(marketStatus, marketYes) {
+  if (marketStatus && marketStatus !== 'active') return 'pass';
+  if (marketYes == null) return 'watch';
+  if (marketYes >= 0.8) return 'buy_yes';
+  if (marketYes <= 0.2) return 'buy_no';
+  return 'watch';
+}
+
 function extractMatchup(...values) {
   for (const value of values) {
     if (!value) continue;
@@ -251,15 +259,28 @@ function extractMatchup(...values) {
 }
 
 function extractTargetPhrase(...values) {
+  const cleanCandidate = candidate => {
+    const text = normalizeText(candidate);
+    if (!text) return null;
+    if (/^(during|at|on|in|as|for|to)\b/.test(text)) return null;
+    return String(candidate).trim();
+  };
+
   for (const value of values) {
     if (!value) continue;
     const text = String(value);
     const quoted = text.match(/"([^"]+)"/) ?? text.match(/'([^']+)'/);
-    if (quoted?.[1]) return quoted[1].trim();
+    if (quoted?.[1]) return cleanCandidate(quoted[1]);
     const sayMatch = text.match(/\bsay\s+([A-Za-z0-9 .&/-]+?)(?:\?|$)/i);
-    if (sayMatch?.[1]) return sayMatch[1].trim();
+    if (sayMatch?.[1]) {
+      const cleaned = cleanCandidate(sayMatch[1]);
+      if (cleaned) return cleaned;
+    }
     const mentionMatch = text.match(/\bmention(?:ing|ed)?\s+([A-Za-z0-9 .&/-]+?)(?:\?|$)/i);
-    if (mentionMatch?.[1]) return mentionMatch[1].trim();
+    if (mentionMatch?.[1]) {
+      const cleaned = cleanCandidate(mentionMatch[1]);
+      if (cleaned) return cleaned;
+    }
   }
   return null;
 }
@@ -350,6 +371,10 @@ function buildUserFacingMarketView(input, marketType, eventType) {
     const targetPhrase =
       metadataValue(metadata, 'target_phrase', 'phrase') ??
       extractTargetPhrase(input.title, input.question, input.market_id, input.url);
+    const marketStatus = metadataValue(metadata, 'market_status');
+    const marketYes = metadataValue(metadata, 'market_yes');
+    const availableContracts = Array.isArray(metadata.available_contracts) ? metadata.available_contracts : [];
+    const bestSide = priceThresholdRecommendation(marketStatus, marketYes);
 
     const watchFor =
       Array.isArray(metadata.watch_for) && metadata.watch_for.every(item => typeof item === 'string')
@@ -376,11 +401,18 @@ function buildUserFacingMarketView(input, marketType, eventType) {
           ? metadata.mention_paths
           : {},
       trade_view: {
-        best_side: 'watch',
-        market_yes: null,
+        best_side: targetPhrase ? bestSide : availableContracts.length > 0 ? 'watch' : 'pass',
+        market_status: marketStatus ?? null,
+        market_ticker: metadataValue(metadata, 'market_ticker'),
+        market_yes: marketYes,
+        market_yes_bid: metadataValue(metadata, 'market_yes_bid'),
+        market_yes_ask: metadataValue(metadata, 'market_yes_ask'),
+        last_price: metadataValue(metadata, 'market_last_price'),
         fair_yes: null,
         edge_cents: null,
+        resolved_outcome: metadataValue(metadata, 'resolved_outcome'),
       },
+      available_contracts: availableContracts,
       watch_for: watchFor,
     };
   }
@@ -468,14 +500,33 @@ function buildUserFacingMarketView(input, marketType, eventType) {
 
 function buildUserFacingStatus(eventType, marketType, marketView) {
   if (marketType === 'general') return 'market_unmapped';
-  if (marketType === 'mention' && !marketView.target_phrase) return 'insufficient_context';
+  if (marketType === 'mention' && !marketView.target_phrase) {
+    return Array.isArray(marketView.available_contracts) && marketView.available_contracts.length > 0
+      ? 'waiting'
+      : 'insufficient_context';
+  }
+  if (marketType === 'mention' && marketView.trade_view?.market_yes != null) return 'ready';
   if (eventType === 'general' && marketType !== 'mention') return 'insufficient_context';
   return 'needs_pricing';
 }
 
-function buildUserFacingRecommendation(marketType, status) {
-  if (status !== 'needs_pricing') return 'pass';
-  return 'watch';
+function buildUserFacingRecommendation(marketType, status, marketView) {
+  if (marketType === 'mention') {
+    return marketView.trade_view?.best_side ?? (status === 'waiting' ? 'watch' : 'pass');
+  }
+  if (marketType === 'moneyline') {
+    return marketView.price_view?.best_action ?? (status === 'ready' || status === 'needs_pricing' ? 'watch' : 'pass');
+  }
+  if (marketType === 'spread') {
+    return marketView.price_view?.best_action ?? (status === 'ready' || status === 'needs_pricing' ? 'watch' : 'pass');
+  }
+  if (marketType === 'total') {
+    return marketView.price_view?.best_action ?? (status === 'ready' || status === 'needs_pricing' ? 'watch' : 'pass');
+  }
+  if (marketType === 'player_prop') {
+    return marketView.price_view?.best_action ?? (status === 'ready' || status === 'needs_pricing' ? 'watch' : 'pass');
+  }
+  return status === 'needs_pricing' ? 'watch' : 'pass';
 }
 
 function buildUserFacingHeadline(status, marketType, eventType, input) {
@@ -484,6 +535,12 @@ function buildUserFacingHeadline(status, marketType, eventType, input) {
   }
   if (status === 'insufficient_context') {
     return 'The market needs more event detail before the app can score it.';
+  }
+  if (status === 'waiting' && marketType === 'mention') {
+    return 'The mention board is loaded, but the app still needs a specific contract.';
+  }
+  if (status === 'ready' && marketType === 'mention') {
+    return 'The mention contract is mapped and priced from Kalshi market data.';
   }
   if (marketType === 'mention') {
     return 'The contract is mapped as a mention market and is ready for pricing.';
@@ -513,6 +570,12 @@ function buildUserFacingReason(status, marketType) {
   if (status === 'insufficient_context') {
     return 'The app can parse the venue, but it still lacks enough event detail to build an actionable card.';
   }
+  if (status === 'waiting' && marketType === 'mention') {
+    return 'The Kalshi link resolves to a board with multiple phrase contracts, so the app needs one specific contract before it can take a side.';
+  }
+  if (status === 'ready' && marketType === 'mention') {
+    return 'The exact phrase, rules summary, and current Kalshi prices are loaded into the card.';
+  }
   if (marketType === 'mention') {
     return 'The phrase path is mapped, but exact pricing and edge still need to be computed.';
   }
@@ -522,6 +585,8 @@ function buildUserFacingReason(status, marketType) {
 function buildUserFacingNextAction(status, marketType, eventType) {
   if (status === 'market_unmapped') return 'review_market_rules';
   if (status === 'insufficient_context') return 'confirm_event_context';
+  if (status === 'waiting' && marketType === 'mention') return 'select_specific_contract';
+  if (status === 'ready' && marketType === 'mention') return 'review_market_rules';
   if (marketType === 'mention' && ['ncaamb_game', 'mlb_game', 'nfl_game', 'nba_game'].includes(eventType)) {
     return 'confirm_broadcast_crew';
   }
@@ -535,7 +600,7 @@ function buildUserFacingCard(input, plan) {
   const marketType = inferMarketType(input, plan.domain);
   const marketView = buildUserFacingMarketView(input, marketType, eventType);
   const status = buildUserFacingStatus(eventType, marketType, marketView);
-  const recommendation = buildUserFacingRecommendation(marketType, status);
+  const recommendation = buildUserFacingRecommendation(marketType, status, marketView);
 
   return {
     source: {
@@ -547,7 +612,7 @@ function buildUserFacingCard(input, plan) {
     event_type: eventType,
     market_type: marketType,
     status,
-    confidence: status === 'needs_pricing' ? 'medium' : 'low',
+    confidence: status === 'ready' || status === 'needs_pricing' ? 'medium' : 'low',
     summary: {
       headline: buildUserFacingHeadline(status, marketType, eventType, input),
       recommendation,
