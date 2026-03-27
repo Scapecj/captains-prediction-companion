@@ -17,9 +17,8 @@ const syne = Syne({
 })
 
 export const metadata: Metadata = {
-  title: 'Alphapoly - Polymarket Alpha Detection',
-  description:
-    'Real-time alpha opportunities from Polymarket prediction markets',
+  title: 'Captains Prediction Companion',
+  description: 'Deterministic market cards for Kalshi and companion workflows',
 }
 
 export default function RootLayout({
@@ -31,9 +30,9 @@ export default function RootLayout({
     <html lang="en" className={`${jetbrains.variable} ${syne.variable}`}>
       <body className="font-mono bg-void text-text-primary antialiased">
         <Providers>
-          <div className="flex h-screen">
+          <div className="flex min-h-screen">
             <Sidebar />
-            <main className="flex-1 flex flex-col ml-48 p-6 min-h-0">
+            <main className="flex min-h-screen flex-1 flex-col p-4 md:ml-48 md:p-6">
               {children}
             </main>
           </div>

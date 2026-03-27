@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { getApiDocsUrl } from '@/config/api-config'
 
 const getNavigation = () => [
+  { name: 'Companion', href: '/companion' },
   { name: 'Terminal', href: '/terminal' },
   { name: 'Positions', href: '/positions' },
   { name: 'API Docs', href: getApiDocsUrl(), external: true },
@@ -15,7 +16,7 @@ export function Sidebar() {
   const navigation = getNavigation()
 
   return (
-    <div className="fixed inset-y-0 left-0 w-48 bg-surface border-r border-border flex flex-col">
+    <div className="fixed inset-y-0 left-0 hidden w-48 flex-col border-r border-border bg-surface md:flex">
       {/* Brand */}
       <div className="px-4 py-5 border-b border-border">
         <Link href="/terminal" className="block group">

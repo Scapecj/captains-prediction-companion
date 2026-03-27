@@ -56,7 +56,16 @@ async function postJsonRpc(
     try {
       json = JSON.parse(bodyText)
     } catch {
-      json = null
+      const ssePayload = extractSseJson(bodyText)
+      if (ssePayload) {
+        try {
+          json = JSON.parse(ssePayload)
+        } catch {
+          json = null
+        }
+      } else {
+        json = null
+      }
     }
   }
 
@@ -65,6 +74,17 @@ async function postJsonRpc(
     payload: json,
     text: bodyText,
   }
+}
+
+function extractSseJson(bodyText: string) {
+  const dataLines = bodyText
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .filter(Boolean)
+
+  if (dataLines.length === 0) return null
+  return dataLines.join('\n')
 }
 
 async function initializeSession() {
