@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 CANONICAL_LEAGUES: dict[str, str] = {
     "NFL": "NFL",
@@ -17,7 +17,9 @@ CANONICAL_LEAGUES: dict[str, str] = {
     "NASCAR_CUP": "NASCAR_CUP",
 }
 
-LEAGUE_ID_BY_NAME: dict[str, str] = {value: key for key, value in CANONICAL_LEAGUES.items()}
+LEAGUE_ID_BY_NAME: dict[str, str] = {
+    value: key for key, value in CANONICAL_LEAGUES.items()
+}
 
 LEAGUE_ALIASES: dict[str, str] = {
     "NATIONAL FOOTBALL LEAGUE": "NFL",
@@ -169,7 +171,12 @@ SPORTS_SKILL_REGISTRY: dict[str, SportSkillSpec] = {
     ),
     "NCAA_BASEBALL": SportSkillSpec(
         skill="baseball_pitcher_weather_skill",
-        features=("starter_projection", "lineup_handedness", "weather", "bullpen_state"),
+        features=(
+            "starter_projection",
+            "lineup_handedness",
+            "weather",
+            "bullpen_state",
+        ),
     ),
     "UFC": SportSkillSpec(
         skill="ufc_style_matchup_skill",
@@ -177,15 +184,33 @@ SPORTS_SKILL_REGISTRY: dict[str, SportSkillSpec] = {
     ),
     "NASCAR_CUP": SportSkillSpec(
         skill="nascar_practice_track_skill",
-        features=("practice_speed", "lap_averages", "tire_falloff", "track_type", "season_form"),
+        features=(
+            "practice_speed",
+            "lap_averages",
+            "tire_falloff",
+            "track_type",
+            "season_form",
+        ),
     ),
     "NASCAR_TRUCKS": SportSkillSpec(
         skill="nascar_practice_track_skill",
-        features=("practice_speed", "lap_averages", "tire_falloff", "track_type", "season_form"),
+        features=(
+            "practice_speed",
+            "lap_averages",
+            "tire_falloff",
+            "track_type",
+            "season_form",
+        ),
     ),
     "NASCAR_OREILLY": SportSkillSpec(
         skill="nascar_practice_track_skill",
-        features=("practice_speed", "lap_averages", "tire_falloff", "track_type", "season_form"),
+        features=(
+            "practice_speed",
+            "lap_averages",
+            "tire_falloff",
+            "track_type",
+            "season_form",
+        ),
     ),
 }
 

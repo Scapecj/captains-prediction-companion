@@ -52,4 +52,3 @@ class EventMarketPipelineConfig:
         default_factory=lambda: dict(EVENT_DOMAIN_ALIASES)
     )
     default_domains: tuple[str, ...] = DEFAULT_EVENT_DOMAINS
-

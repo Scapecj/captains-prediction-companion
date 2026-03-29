@@ -44,7 +44,9 @@ class ClosingLineTracker:
         self.records.append(record)
 
     @staticmethod
-    def compute_clv(entry_probability: float, closing_probability: float, side: str) -> float:
+    def compute_clv(
+        entry_probability: float, closing_probability: float, side: str
+    ) -> float:
         if side.upper() == "YES":
             return closing_probability - entry_probability
         if side.upper() == "NO":
@@ -54,10 +56,14 @@ class ClosingLineTracker:
     def attach_clv(self, record: ClosingLineRecord) -> ClosingLineRecord:
         if record.closing_probability is None:
             return record
-        clv = self.compute_clv(record.market_probability, record.closing_probability, record.side)
+        clv = self.compute_clv(
+            record.market_probability, record.closing_probability, record.side
+        )
         return replace(record, clv=clv)
 
-    def summarize_by(self, key_fn: Callable[[ClosingLineRecord], str]) -> dict[str, dict[str, float]]:
+    def summarize_by(
+        self, key_fn: Callable[[ClosingLineRecord], str]
+    ) -> dict[str, dict[str, float]]:
         buckets: dict[str, list[float]] = defaultdict(list)
         for record in self.records:
             if record.clv is not None:
@@ -97,12 +103,18 @@ class ConsensusPriceEngine:
             return float(quote["price"])
         raise ValueError("Quote must include implied_probability or price")
 
-    def build_consensus(self, quotes: Sequence[SportsMarketQuote | dict[str, Any]]) -> ConsensusResult:
+    def build_consensus(
+        self, quotes: Sequence[SportsMarketQuote | dict[str, Any]]
+    ) -> ConsensusResult:
         if not quotes:
             raise ValueError("At least one quote is required")
         per_venue: dict[str, float] = {}
         for quote in quotes:
-            venue = quote.venue if isinstance(quote, SportsMarketQuote) else str(quote.get("venue", "unknown"))
+            venue = (
+                quote.venue
+                if isinstance(quote, SportsMarketQuote)
+                else str(quote.get("venue", "unknown"))
+            )
             per_venue[venue] = self._prob_from_quote(quote)
         consensus = median(per_venue.values())
         stale_venues = tuple(
@@ -137,7 +149,14 @@ class InjuryNewsGate:
         lineup_confirmed: bool,
         weather_confirmed: bool = True,
         news_quality: str = "confirmed",
-        strict_leagues: Iterable[str] = ("NFL", "NCAA_FB", "NBA", "NCAA_BB", "MLB", "NCAA_BASEBALL"),
+        strict_leagues: Iterable[str] = (
+            "NFL",
+            "NCAA_FB",
+            "NBA",
+            "NCAA_BB",
+            "MLB",
+            "NCAA_BASEBALL",
+        ),
     ) -> InjuryGateDecision:
         strict = league in set(strict_leagues)
         if strict and not (injury_confirmed and lineup_confirmed and weather_confirmed):
@@ -152,7 +171,9 @@ class InjuryNewsGate:
                 reason="News inputs are not fully confirmed",
                 confidence=0.7,
             )
-        return InjuryGateDecision(action="allow", reason="Inputs confirmed", confidence=0.95)
+        return InjuryGateDecision(
+            action="allow", reason="Inputs confirmed", confidence=0.95
+        )
 
 
 @dataclass(slots=True)
@@ -182,7 +203,9 @@ class MonteCarloPricer:
                 outcomes.append(float(sample))
                 wins += int(float(sample) >= 0.5)
         fair_probability = wins / runs if runs else 0.0
-        return MonteCarloResult(fair_probability=fair_probability, distribution=outcomes, runs=runs)
+        return MonteCarloResult(
+            fair_probability=fair_probability, distribution=outcomes, runs=runs
+        )
 
 
 @dataclass(slots=True)
@@ -196,7 +219,9 @@ class ModelCalibrationReporter:
     """Measure calibration by probability buckets and phase/league slices."""
 
     @staticmethod
-    def bucket_predictions(predictions: Sequence[float], results: Sequence[bool], bucket_size: float = 0.05) -> list[CalibrationBucket]:
+    def bucket_predictions(
+        predictions: Sequence[float], results: Sequence[bool], bucket_size: float = 0.05
+    ) -> list[CalibrationBucket]:
         if len(predictions) != len(results):
             raise ValueError("predictions and results must have the same length")
         buckets: dict[float, list[int]] = defaultdict(list)

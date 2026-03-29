@@ -7,7 +7,9 @@ import os
 DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 
 
-def resolve_openrouter_model(env_var: str, fallback: str = DEFAULT_OPENROUTER_MODEL) -> str:
+def resolve_openrouter_model(
+    env_var: str, fallback: str = DEFAULT_OPENROUTER_MODEL
+) -> str:
     """Return a configured OpenRouter model or a safe free-model fallback."""
     value = os.getenv(env_var)
     if value is None:

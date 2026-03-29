@@ -22,7 +22,9 @@ def test_openrouter_model_defaults_allow_overrides(monkeypatch):
     monkeypatch.setenv("VALIDATION_MODEL", "google/gemini-3-flash-preview")
 
     assert resolve_openrouter_model("IMPLICATIONS_MODEL") == "google/gemini-2.5-flash"
-    assert resolve_openrouter_model("VALIDATION_MODEL") == "google/gemini-3-flash-preview"
+    assert (
+        resolve_openrouter_model("VALIDATION_MODEL") == "google/gemini-3-flash-preview"
+    )
     assert get_pipeline_model_defaults() == {
         "implications": "google/gemini-2.5-flash",
         "validation": "google/gemini-3-flash-preview",

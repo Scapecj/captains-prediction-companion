@@ -27,14 +27,21 @@ def _coerce_event(item: SportEvent | Mapping[str, Any]) -> SportEvent:
         )
 
     league = normalize_league_name(str(item.get("league") or item.get("sport") or ""))
-    event_id = str(item.get("event_id") or item.get("id") or item.get("market_id") or "")
+    event_id = str(
+        item.get("event_id") or item.get("id") or item.get("market_id") or ""
+    )
     if not league or not event_id:
         raise ValueError("Each sports event must include a league and event_id")
     return SportEvent(
         league=league,
         event_id=event_id,
         title=item.get("title") or item.get("name"),
-        metadata={k: v for k, v in item.items() if k not in {"league", "sport", "event_id", "id", "market_id", "title", "name"}},
+        metadata={
+            k: v
+            for k, v in item.items()
+            if k
+            not in {"league", "sport", "event_id", "id", "market_id", "title", "name"}
+        },
     )
 
 
@@ -52,7 +59,9 @@ def sports_calendar_router(
     raw_games = [_coerce_event(item) for item in schedule_fetcher(date_range_days)]
 
     counts = Counter(game.league for game in raw_games if game.league)
-    preferred = tuple(preferred_sports or config.routing.preferred_sports or DEFAULT_PREFERRED_SPORTS)
+    preferred = tuple(
+        preferred_sports or config.routing.preferred_sports or DEFAULT_PREFERRED_SPORTS
+    )
 
     active_sports = [
         league

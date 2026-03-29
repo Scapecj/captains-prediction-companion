@@ -52,4 +52,3 @@ class EventMarketPipelinePlan:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to plain data for APIs and prompts."""
         return asdict(self)
-

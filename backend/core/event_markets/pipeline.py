@@ -19,9 +19,7 @@ from core.event_markets.sources import (
     normalize_event_domain,
 )
 
-DECISION_RULE = (
-    "Market first, Perplexity second, scraper third, decision layer last."
-)
+DECISION_RULE = "Market first, Perplexity second, scraper third, decision layer last."
 
 
 def build_event_market_pipeline(

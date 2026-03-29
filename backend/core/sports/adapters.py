@@ -76,7 +76,9 @@ def get_provider_selection(
     return SportsProviderSelection(
         league=league,
         data_kind=data_kind,
-        provider_stack=get_provider_stack(league, data_kind, market_subtype=market_subtype),
+        provider_stack=get_provider_stack(
+            league, data_kind, market_subtype=market_subtype
+        ),
         market_subtype=market_subtype,
     )
 

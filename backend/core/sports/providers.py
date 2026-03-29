@@ -57,7 +57,18 @@ PROVIDER_ADAPTERS: dict[str, ProviderAdapterSpec] = {
         name="Perplexity",
         provider_type="research",
         data_kinds=("research",),
-        leagues=("NFL", "NCAA_FB", "NCAA_BB", "NBA", "MLB", "NCAA_BASEBALL", "UFC", "NASCAR_TRUCKS", "NASCAR_OREILLY", "NASCAR_CUP"),
+        leagues=(
+            "NFL",
+            "NCAA_FB",
+            "NCAA_BB",
+            "NBA",
+            "MLB",
+            "NCAA_BASEBALL",
+            "UFC",
+            "NASCAR_TRUCKS",
+            "NASCAR_OREILLY",
+            "NASCAR_CUP",
+        ),
         auth_env_vars=("PERPLEXITY_API_KEY",),
         notes="Perplexity-first research and source discovery layer for news, injuries, weather, and official source mapping.",
         url="https://docs.perplexity.ai/",
@@ -66,7 +77,18 @@ PROVIDER_ADAPTERS: dict[str, ProviderAdapterSpec] = {
         name="Playwright Scraper Skill",
         provider_type="research_scraper",
         data_kinds=("research",),
-        leagues=("NFL", "NCAA_FB", "NCAA_BB", "NBA", "MLB", "NCAA_BASEBALL", "UFC", "NASCAR_TRUCKS", "NASCAR_OREILLY", "NASCAR_CUP"),
+        leagues=(
+            "NFL",
+            "NCAA_FB",
+            "NCAA_BB",
+            "NBA",
+            "MLB",
+            "NCAA_BASEBALL",
+            "UFC",
+            "NASCAR_TRUCKS",
+            "NASCAR_OREILLY",
+            "NASCAR_CUP",
+        ),
         notes="Built-in scraper skill for public pages, official docs, schedules, injury reports, and source discovery when a paid API is unnecessary.",
         url="https://playwright.dev/",
     ),
@@ -242,8 +264,18 @@ SPORTS_PROVIDER_MATRIX: dict[str, dict[DataKind, tuple[str, ...]]] = {
 
 
 SPORTS_PROP_FALLBACKS: dict[str, tuple[str, ...]] = {
-    "mlb_home_run_prop": ("Baseball Savant", "MLB Stats API", "Playwright Scraper Skill", "The Odds API"),
-    "mlb_pitcher_strikeout_prop": ("MLB Stats API", "Baseball Savant", "Playwright Scraper Skill", "The Odds API"),
+    "mlb_home_run_prop": (
+        "Baseball Savant",
+        "MLB Stats API",
+        "Playwright Scraper Skill",
+        "The Odds API",
+    ),
+    "mlb_pitcher_strikeout_prop": (
+        "MLB Stats API",
+        "Baseball Savant",
+        "Playwright Scraper Skill",
+        "The Odds API",
+    ),
 }
 
 SPORTS_FALLBACK_ORDER: dict[str, dict[str, tuple[str, ...]]] = {
@@ -251,7 +283,9 @@ SPORTS_FALLBACK_ORDER: dict[str, dict[str, tuple[str, ...]]] = {
         **matrix,
         "research": ("Perplexity", "Playwright Scraper Skill"),
         "mlb_home_run_prop": SPORTS_PROP_FALLBACKS["mlb_home_run_prop"],
-        "mlb_pitcher_strikeout_prop": SPORTS_PROP_FALLBACKS["mlb_pitcher_strikeout_prop"],
+        "mlb_pitcher_strikeout_prop": SPORTS_PROP_FALLBACKS[
+            "mlb_pitcher_strikeout_prop"
+        ],
     }
     for league, matrix in SPORTS_PROVIDER_MATRIX.items()
 }

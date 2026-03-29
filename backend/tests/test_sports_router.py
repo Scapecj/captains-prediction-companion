@@ -2,13 +2,19 @@ from core.sports.adapters import get_provider_selection
 from core.sports.advanced import ConsensusPriceEngine, NoBetClassifier
 from core.sports.config import DEFAULT_SPORTS_CONFIG, normalize_league_name
 from core.sports.models import SportEvent, SportsMarketQuote
-from core.sports.providers import SPORTS_FALLBACK_ORDER, SPORTS_PROVIDER_MATRIX, get_provider_stack
+from core.sports.providers import (
+    SPORTS_FALLBACK_ORDER,
+    SPORTS_PROVIDER_MATRIX,
+    get_provider_stack,
+)
 from core.sports.router import sports_calendar_router
 
 
 def test_normalize_league_name_aliases():
     assert normalize_league_name("NCAA Men's Basketball") == "NCAA_BB"
-    assert normalize_league_name("NASCAR O'Reilly Auto Parts Series") == "NASCAR_OREILLY"
+    assert (
+        normalize_league_name("NASCAR O'Reilly Auto Parts Series") == "NASCAR_OREILLY"
+    )
     assert normalize_league_name("MMA") == "UFC"
 
 
@@ -39,9 +45,15 @@ def test_sports_calendar_router_falls_back_when_empty():
 def test_consensus_price_engine_flags_stale_quotes():
     engine = ConsensusPriceEngine(stale_price_threshold_prob=0.02)
     quotes = [
-        SportsMarketQuote(venue="A", market_id="m1", price=0.62, implied_probability=0.62),
-        SportsMarketQuote(venue="B", market_id="m1", price=0.61, implied_probability=0.61),
-        SportsMarketQuote(venue="C", market_id="m1", price=0.70, implied_probability=0.70),
+        SportsMarketQuote(
+            venue="A", market_id="m1", price=0.62, implied_probability=0.62
+        ),
+        SportsMarketQuote(
+            venue="B", market_id="m1", price=0.61, implied_probability=0.61
+        ),
+        SportsMarketQuote(
+            venue="C", market_id="m1", price=0.70, implied_probability=0.70
+        ),
     ]
 
     result = engine.build_consensus(quotes)
@@ -68,13 +80,21 @@ def test_no_bet_classifier_blocks_weak_and_stale_edges():
 
 
 def test_provider_matrix_prioritizes_the_right_sources():
-    assert get_provider_stack("NFL", "research") == ("Perplexity", "Playwright Scraper Skill")
+    assert get_provider_stack("NFL", "research") == (
+        "Perplexity",
+        "Playwright Scraper Skill",
+    )
     assert get_provider_stack("NFL", "odds")[0] == "The Odds API"
     assert get_provider_stack("NFL", "schedule")[0] == "nflverse"
     assert get_provider_stack("MLB", "historical")[0] == "Baseball Savant"
-    assert get_provider_stack("MLB", "props", market_subtype="mlb_home_run_prop")[0] == "Baseball Savant"
+    assert (
+        get_provider_stack("MLB", "props", market_subtype="mlb_home_run_prop")[0]
+        == "Baseball Savant"
+    )
     assert SPORTS_PROVIDER_MATRIX["MLB"]["props"][0] == "Baseball Savant"
-    assert SPORTS_FALLBACK_ORDER["MLB"]["mlb_pitcher_strikeout_prop"][0] == "MLB Stats API"
+    assert (
+        SPORTS_FALLBACK_ORDER["MLB"]["mlb_pitcher_strikeout_prop"][0] == "MLB Stats API"
+    )
 
 
 def test_provider_selection_wraps_provider_stack():

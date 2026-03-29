@@ -53,4 +53,3 @@ def build_market_source_order(
         default_source_stack[1],
         default_source_stack[2],
     )
-

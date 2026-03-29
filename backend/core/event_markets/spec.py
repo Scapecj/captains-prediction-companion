@@ -257,7 +257,9 @@ def _infer_market_type(context: EventMarketContext) -> str:
 
     if any(token in combined for token in ("mention", "phrase", "say ", "said ")):
         return "mention"
-    if any(token in combined for token in ("player prop", "player_prop", "props", "stat")):
+    if any(
+        token in combined for token in ("player prop", "player_prop", "props", "stat")
+    ):
         return "player_prop"
     if any(token in combined for token in ("spread", "cover")):
         return "spread"
@@ -276,11 +278,22 @@ def _infer_event_type(context: EventMarketContext) -> str:
 
     if domain_hint == "earnings" or any(
         token in combined
-        for token in ("earnings", "quarterly results", "earnings call", "q1", "q2", "q3", "q4")
+        for token in (
+            "earnings",
+            "quarterly results",
+            "earnings call",
+            "q1",
+            "q2",
+            "q3",
+            "q4",
+        )
     ):
         return "earnings_call"
     if domain_hint == "sports" or "sports_" in combined:
-        if any(token in combined for token in ("ncaamb", "ncaa", "march madness", "college basketball")):
+        if any(
+            token in combined
+            for token in ("ncaamb", "ncaa", "march madness", "college basketball")
+        ):
             return "ncaamb_game"
         if any(token in combined for token in ("mlb", "baseball", "first pitch")):
             return "mlb_game"
@@ -302,7 +315,10 @@ def _infer_event_type(context: EventMarketContext) -> str:
 def _infer_event_domain(event_type: str, context: EventMarketContext) -> str:
     domain_hint = normalize_event_domain(context.domain)
     if event_type in EVENT_TYPE_TO_DOMAIN:
-        if event_type in {"speech", "press_conference", "hearing"} and domain_hint == "mention":
+        if (
+            event_type in {"speech", "press_conference", "hearing"}
+            and domain_hint == "mention"
+        ):
             return "media"
         return EVENT_TYPE_TO_DOMAIN[event_type]
     if domain_hint == "sports":
@@ -320,8 +336,16 @@ def _build_context(event_type: str, context: EventMarketContext) -> dict[str, An
     metadata = dict(context.metadata or {})
     matchup_away, matchup_home = _extract_matchup(context.title or context.question)
     teams = metadata.get("teams") if isinstance(metadata.get("teams"), dict) else {}
-    away = _metadata_value(metadata, "away_team", "away") or teams.get("away") or matchup_away
-    home = _metadata_value(metadata, "home_team", "home") or teams.get("home") or matchup_home
+    away = (
+        _metadata_value(metadata, "away_team", "away")
+        or teams.get("away")
+        or matchup_away
+    )
+    home = (
+        _metadata_value(metadata, "home_team", "home")
+        or teams.get("home")
+        or matchup_home
+    )
 
     if event_type == "earnings_call":
         return {
@@ -336,7 +360,9 @@ def _build_context(event_type: str, context: EventMarketContext) -> dict[str, An
             "venue": _metadata_value(metadata, "venue"),
             "tipoff": _metadata_value(metadata, "tipoff", "start_time"),
             "tournament_stage": _metadata_value(metadata, "tournament_stage"),
-            "broadcast": {"network": _metadata_value(metadata, "broadcast_network", "network")},
+            "broadcast": {
+                "network": _metadata_value(metadata, "broadcast_network", "network")
+            },
         }
     if event_type == "mlb_game":
         return {
@@ -355,14 +381,18 @@ def _build_context(event_type: str, context: EventMarketContext) -> dict[str, An
             "venue": _metadata_value(metadata, "venue"),
             "kickoff": _metadata_value(metadata, "kickoff", "start_time"),
             "weather_summary": _metadata_value(metadata, "weather_summary"),
-            "broadcast": {"network": _metadata_value(metadata, "broadcast_network", "network")},
+            "broadcast": {
+                "network": _metadata_value(metadata, "broadcast_network", "network")
+            },
         }
     if event_type == "nba_game":
         return {
             "teams": {"away": away, "home": home},
             "venue": _metadata_value(metadata, "venue"),
             "tipoff": _metadata_value(metadata, "tipoff", "start_time"),
-            "broadcast": {"network": _metadata_value(metadata, "broadcast_network", "network")},
+            "broadcast": {
+                "network": _metadata_value(metadata, "broadcast_network", "network")
+            },
         }
     if event_type == "speech":
         return {
@@ -433,9 +463,9 @@ def _build_market_view(
     confidence = "medium" if market_type != "general" else "low"
 
     if market_type == "mention":
-        target_phrase = _metadata_value(metadata, "target_phrase", "phrase") or _extract_target_phrase(
-            context.title, context.question
-        )
+        target_phrase = _metadata_value(
+            metadata, "target_phrase", "phrase"
+        ) or _extract_target_phrase(context.title, context.question)
         return {
             "target_phrase": target_phrase,
             "rules_summary": _metadata_value(metadata, "rules_summary")
@@ -523,7 +553,9 @@ def _build_market_view(
     }
 
 
-def _build_status(event_type: str, market_type: str, market_view: dict[str, Any]) -> str:
+def _build_status(
+    event_type: str, market_type: str, market_view: dict[str, Any]
+) -> str:
     if market_type == "general":
         return "market_unmapped"
     if event_type == "general":
@@ -552,13 +584,17 @@ def _build_headline(
     context: EventMarketContext,
 ) -> str:
     if status == "market_unmapped":
-        return "The market needs a manual classification pass before the app can price it."
+        return (
+            "The market needs a manual classification pass before the app can price it."
+        )
     if status == "insufficient_context":
         return "The market needs more event detail before the app can score it."
     if market_type == "mention":
         return "The contract is mapped as a mention market and is ready for pricing."
     if market_type == "moneyline":
-        return "The contract is mapped as a game winner market and is ready for pricing."
+        return (
+            "The contract is mapped as a game winner market and is ready for pricing."
+        )
     if market_type == "spread":
         return "The contract is mapped as a spread market and is ready for pricing."
     if market_type == "total":
