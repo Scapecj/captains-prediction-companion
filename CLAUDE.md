@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> Polymarket alpha detection platform. LLM pipeline groups related markets, extracts logical implications, and builds covering portfolios (hedged positions via contrapositive logic). Next.js dashboard with real-time price tracking and position management.
+> Captain's Prediction Companion — ChatGPT-first prediction market alpha system. Remote MCP server (port 3000) as primary surface. Companion router dispatches to per-event-type alpha apps (sports, politics, mentions). Dashboard is a future expansion path.
 
 ## Commands
 
