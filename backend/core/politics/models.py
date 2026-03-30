@@ -127,3 +127,5 @@ class MentionMarketOutput:
     no_bet_flag: bool = False
     no_bet_reason: str = ""
     notes: list[str] = field(default_factory=list)
+    source_diagnostics: dict[str, Any] = field(default_factory=dict)
+    runtime_context: dict[str, Any] = field(default_factory=dict)

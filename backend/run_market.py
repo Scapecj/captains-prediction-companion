@@ -114,11 +114,76 @@ def run_sports_market(args: argparse.Namespace, meta: dict) -> dict:
     return result
 
 
-def run_politics_market(args: argparse.Namespace, meta: dict) -> dict:
+def _is_event_level_mention_request(args: argparse.Namespace, meta: dict) -> bool:
+    if args.child_market:
+        return False
+    domain = (args.domain or "").lower()
+    if domain == "mentions":
+        return True
+    if args.market_id and "mention" in args.market_id.lower():
+        return True
+    meta_domain = str(meta.get("domain", "")).lower()
+    return meta_domain == "mentions"
+
+
+def run_politics_market(
+    args: argparse.Namespace,
+    meta: dict,
+    *,
+    mention_runner=None,
+    event_fetcher=None,
+    decision_agent=None,
+    runtime_adapter=None,
+) -> dict:
     from core.politics.router import get_politics_router
     from core.politics.models import PoliticsRouterInput
     from core.politics.apps.politics_app import run as politics_run
-    from core.politics.apps.mentions_app import run as mentions_run, MentionMarketInput
+    from core.politics.apps.mentions_app import (
+        run as mentions_run,
+        MentionMarketInput,
+        MentionEventInput,
+        run_child_market,
+        run_event_board,
+    )
+
+    runner = mention_runner or mentions_run
+    if args.child_market:
+        child_input = MentionMarketInput(
+            source=args.source,
+            market_id=args.child_market,
+            title=args.title or args.child_market,
+            exact_phrase=meta.get("exact_phrase", ""),
+            speaker=meta.get("speaker", ""),
+            venue=meta.get("venue", ""),
+            resolution_window=meta.get("resolution_window", ""),
+            current_price_yes=args.price_yes,
+            raw_metadata=meta,
+        )
+        return run_child_market(
+            child_input,
+            mention_runner=runner,
+            runtime_adapter=runtime_adapter,
+            decision_agent=decision_agent,
+            metadata=meta,
+        )
+
+    if _is_event_level_mention_request(args, meta):
+        event_input = MentionEventInput(
+            source=args.source,
+            market_id=args.market_id,
+            title=args.title or args.market_id,
+            speaker=meta.get("speaker", ""),
+            venue=meta.get("venue", ""),
+            resolution_window=meta.get("resolution_window", ""),
+            metadata=meta,
+        )
+        return run_event_board(
+            event_input,
+            runtime_adapter=runtime_adapter,
+            market_fetcher=event_fetcher,
+            mention_runner=runner,
+            decision_agent=decision_agent,
+        )
 
     title = args.title or args.market_id
     inp = PoliticsRouterInput(
@@ -143,7 +208,7 @@ def run_politics_market(args: argparse.Namespace, meta: dict) -> dict:
             resolution_window=meta.get("resolution_window", ""),
             current_price_yes=args.price_yes,
         )
-        output = mentions_run(mention_inp)
+        output = runner(mention_inp)
         return {
             "market_id": args.market_id,
             "routed_to": "mentions_app",
@@ -155,6 +220,8 @@ def run_politics_market(args: argparse.Namespace, meta: dict) -> dict:
             "no_bet_flag": output.no_bet_flag,
             "no_bet_reason": output.no_bet_reason,
             "notes": output.notes,
+            "source_diagnostics": output.source_diagnostics,
+            "runtime_context": output.runtime_context,
         }
     elif route.target_app == "politics_app":
         inp.market_type = route.market_type
@@ -183,21 +250,79 @@ def run_politics_market(args: argparse.Namespace, meta: dict) -> dict:
         }
 
 
+def _apply_snapshot(args: argparse.Namespace, snap) -> None:
+    """Fill in args from a MarketSnapshot (Kalshi fetch result)."""
+    if not args.market_id or args.market_id == "UNKNOWN":
+        args.market_id = snap.ticker
+    if not args.title:
+        args.title = snap.title or snap.ticker
+    if args.price_yes is None and snap.current_price_yes is not None:
+        args.price_yes = snap.current_price_yes
+    if args.domain is None:
+        args.domain = snap.domain if snap.domain in ("sports", "politics", "mentions", "macro") else None
+    # Inject mention-specific fields into meta
+    try:
+        meta = json.loads(args.meta) if args.meta != "{}" else {}
+    except Exception:
+        meta = {}
+    if snap.exact_phrase and "exact_phrase" not in meta:
+        meta["exact_phrase"] = snap.exact_phrase
+    if snap.speaker and "speaker" not in meta:
+        meta["speaker"] = snap.speaker
+    if snap.venue and "venue" not in meta:
+        meta["venue"] = snap.venue
+    if snap.close_time and "resolution_window" not in meta:
+        meta["resolution_window"] = snap.close_time
+    args.meta = json.dumps(meta)
+    args.source = "kalshi"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a market through the companion pipeline")
+    parser.add_argument("--url", default=None, help="Kalshi market URL (auto-fetches all data)")
     parser.add_argument("--source", default="manual")
     parser.add_argument("--market-id", default="UNKNOWN")
+    parser.add_argument("--child-market", default=None, help="Explicit child mention ticker (debug helper mode)")
     parser.add_argument("--title", default=None, help="Market title (required for politics)")
     parser.add_argument("--league", default=None)
     parser.add_argument("--market-type", default=None)
     parser.add_argument("--phase", default="pre_game", choices=["pre_game", "live", "futures"])
     parser.add_argument("--price-yes", type=float, default=None, help="Current market price (0-1)")
-    parser.add_argument("--domain", default=None, choices=["sports", "politics", "mentions"],
+    parser.add_argument("--domain", default=None, choices=["sports", "politics", "mentions", "macro"],
                         help="Override domain (auto-detected if omitted)")
     parser.add_argument("--meta", default="{}", help="JSON string of app-specific metadata")
     parser.add_argument("--bankroll", type=float, default=1000.0)
     parser.add_argument("--odds", type=float, default=-110)
     args = parser.parse_args()
+
+    # Auto-fetch from URL if provided
+    if args.url:
+        try:
+            from core.scrapers.kalshi_fetcher import KalshiMarketFetcher
+            fetcher = KalshiMarketFetcher()
+            snap = fetcher.fetch_from_url(args.url)
+            if snap.error:
+                print(json.dumps({"error": f"Kalshi fetch failed: {snap.error}"}))
+                sys.exit(1)
+            _apply_snapshot(args, snap)
+            # Print what we fetched
+            print(json.dumps({
+                "_fetched": {
+                    "ticker": snap.ticker,
+                    "phrase": snap.exact_phrase,
+                    "speaker": snap.speaker,
+                    "venue": snap.venue,
+                    "price_yes": snap.current_price_yes,
+                    "bid": snap.yes_bid,
+                    "ask": snap.yes_ask,
+                    "volume": snap.volume,
+                    "close_time": snap.close_time,
+                    "domain": snap.domain,
+                }
+            }, indent=2), file=sys.stderr)
+        except Exception as e:
+            print(json.dumps({"error": f"URL fetch failed: {e}"}))
+            sys.exit(1)
 
     # Support piped JSON
     piped = sys.stdin.read().strip() if not sys.stdin.isatty() else ""
@@ -224,6 +349,7 @@ def main() -> None:
             domain = "politics"
         else:
             domain = "sports"
+    args.domain = domain
 
     try:
         if domain == "sports":
