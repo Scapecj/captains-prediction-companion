@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPipelineService } from '../src/pipelineService.js';
+import { resolveHermesCommand } from '../src/hermesRuntime.js';
 
 const RECENT_URL =
   'https://kalshi.com/markets/kxtrumpmention/what-will-trump-say/KXTRUMPMENTION-26MAR27?utm_source=kalshiapp_eventpage';
@@ -46,6 +47,56 @@ function buildReadyCard(url, ticker = 'KXTEST-1') {
           last_price: 0.84,
           fair_yes: 0.75,
           edge_cents: -4,
+        },
+      },
+    },
+  };
+}
+
+function buildNoEdgeBoard(url, ticker = 'KXNOEDGE-1') {
+  return {
+    user_facing: {
+      source: {
+        platform: 'Kalshi',
+        url,
+        market_id: ticker,
+      },
+      event_domain: 'general',
+      event_type: 'general',
+      market_type: 'general',
+      status: 'ready',
+      confidence: 'low',
+      summary: {
+        headline: 'The board has no actionable edge.',
+        recommendation: 'pass',
+        one_line_reason: 'Pricing is too close to fair value to act.',
+      },
+      next_action: 'watch_market',
+      context: {},
+      market_view: {
+        available_contracts: [
+          {
+            market_ticker: `${ticker}-A`,
+            label: 'Alpha',
+            market_yes: 0.5,
+            yes_bid: 0.49,
+            yes_ask: 0.51,
+            last_price: 0.5,
+          },
+          {
+            market_ticker: `${ticker}-B`,
+            label: 'Beta',
+            market_yes: 0.5,
+            yes_bid: 0.49,
+            yes_ask: 0.51,
+            last_price: 0.5,
+          },
+        ],
+        trade_view: {
+          market_ticker: ticker,
+          market_status: 'active',
+          fair_yes: 0.5,
+          edge_cents: 0,
         },
       },
     },
@@ -121,7 +172,7 @@ test('pipeline service appends durable per-run card outputs to a local file', as
     outputFile,
     seedUrls: [SEED_URL],
     now: () => new Date('2026-04-22T12:00:00.000Z'),
-    runMarketAnalysis: async input => buildReadyCard(input.url, 'KXOUTPUT-1'),
+    runMarketAnalysis: async input => buildNoEdgeBoard(input.url, 'KXNOEDGE-1'),
   });
 
   service.recordRecentUrl(RECENT_URL);
@@ -133,12 +184,62 @@ test('pipeline service appends durable per-run card outputs to a local file', as
   assert.equal(output[0].run_id, 1);
   assert.equal(output[0].cards.length, 1);
   assert.equal(output[0].cards[0].url, RECENT_URL);
-  assert.equal(output[0].cards[0].summary_headline, 'The mention contract is priced and the alpha pipeline has a directional edge.');
-  assert.equal(output[0].cards[0].recommendation, 'buy_no');
-  assert.equal(output[0].cards[0].confidence, 'medium');
+  assert.equal(output[0].cards[0].summary_headline, 'The board has no actionable edge.');
+  assert.equal(output[0].cards[0].recommendation, 'pass');
+  assert.equal(output[0].cards[0].confidence, 'low');
   assert.equal(typeof output[0].cards[0].recorded_at, 'string');
+  assert.equal(output[0].cards[0].no_edge_reason_code, 'manual_classification_required');
+  assert.equal(
+    output[0].cards[0].no_edge_reason,
+    'The card was classified as general/general, so it stayed pass pending manual classification.'
+  );
 
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('pipeline service falls back safely when Hermes returns unusable output', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pipeline-service-hermes-fallback-'));
+  const stateFile = join(dir, 'pipeline-state.json');
+  const outputFile = join(dir, 'pipeline-card-outputs.json');
+  const previousHermesCommand = process.env.HERMES_COMMAND;
+
+  process.env.HERMES_COMMAND = 'definitely-not-a-real-hermes-binary';
+
+  try {
+    const service = createPipelineService({
+      stateFile,
+      outputFile,
+      seedUrls: [SEED_URL],
+      now: () => new Date('2026-04-22T12:00:00.000Z'),
+    });
+
+    service.recordRecentUrl(RECENT_URL);
+    await service.runProduction({ full: false, max_events: 1 });
+
+    const output = JSON.parse(readFileSync(outputFile, 'utf8'));
+    assert.equal(Array.isArray(output), true);
+    assert.equal(output.length, 1);
+    assert.equal(output[0].run_id, 1);
+    assert.equal(output[0].cards.length, 1);
+    assert.equal(output[0].cards[0].url, RECENT_URL);
+    assert.equal(output[0].cards[0].board_url, RECENT_URL);
+    assert.equal(output[0].cards[0].summary_headline, 'Hermes research fallback');
+    assert.equal(output[0].cards[0].recommendation, 'watch');
+    assert.equal(output[0].cards[0].board_recommendation, 'watch');
+    assert.equal(output[0].cards[0].confidence, 'low');
+    assert.equal(output[0].cards[0].board_confidence, 'low');
+    assert.equal(typeof output[0].cards[0].board_no_edge_reason_code, 'string');
+    assert.equal(typeof output[0].cards[0].no_edge_reason_code, 'string');
+    assert.match(output[0].cards[0].no_edge_reason, /manual classification|fallback|unusable structured evidence/i);
+    assert.equal(Array.isArray(output[0].cards[0].child_contracts), true);
+  } finally {
+    if (previousHermesCommand === undefined) {
+      delete process.env.HERMES_COMMAND;
+    } else {
+      process.env.HERMES_COMMAND = previousHermesCommand;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('pipeline reset clears persisted research state', async () => {
