@@ -4,6 +4,7 @@ import { buildFocusedKalshiMarketPlan, buildEventMarketPlanSummary } from './eve
 import { runHermesResearch } from './hermesResearch.js';
 import { runHermesOracle } from './hermesOracle.js';
 import { resolveOpenRouterModel } from './modelDefaults.js';
+import { buildOfficialSourcePacket } from './sourcePackets.js';
 
 const MAX_RECENT_URLS = 20;
 const ACTIONABLE_RECOMMENDATIONS = new Set([
@@ -193,6 +194,30 @@ function summarizeResult(result, url) {
   const summary = buildEventMarketPlanSummary(result);
   return {
     ...summary,
+    board_url: result?.board_url ?? summary?.source?.url ?? url,
+    board_headline: result?.board_headline ?? summary?.summary?.headline ?? null,
+    board_recommendation: result?.board_recommendation ?? summary?.summary?.recommendation ?? null,
+    board_confidence: result?.board_confidence ?? summary?.confidence ?? null,
+    board_no_edge_reason_code: result?.board_no_edge_reason_code ?? null,
+    board_no_edge_reason: result?.board_no_edge_reason ?? null,
+    official_source_url: result?.official_source_url ?? null,
+    official_source_type: result?.official_source_type ?? null,
+    transcript_excerpt: result?.transcript_excerpt ?? null,
+    research_summary: result?.research_summary ?? result?.summary?.one_line_reason ?? null,
+    evidence_strength: result?.evidence_strength ?? null,
+    source_quality: result?.source_quality ?? null,
+    source_packet_kind: result?.source_packet_kind ?? null,
+    event_format: result?.event_format ?? null,
+    speaker_type: result?.speaker_type ?? null,
+    timing_relevance: result?.timing_relevance ?? null,
+    why_valid_under_kalshi_rules: result?.why_valid_under_kalshi_rules ?? null,
+    exact_phrase_status: result?.exact_phrase_status ?? null,
+    official_source_candidates: Array.isArray(result?.official_source_candidates) ? result.official_source_candidates : [],
+    edge_type: result?.edge_type ?? null,
+    catalyst: result?.catalyst ?? null,
+    reasoning_chain: Array.isArray(result?.reasoning_chain) ? result.reasoning_chain : [],
+    invalidation_condition: result?.invalidation_condition ?? null,
+    time_sensitivity: result?.time_sensitivity ?? null,
     source: {
       ...(isObject(summary.source) ? summary.source : {}),
       platform: summary?.source?.platform ?? 'Kalshi',
@@ -334,6 +359,11 @@ function createOutputRecord(result, runId, recordedAt) {
     no_edge_reason_code: boardNoEdgeReasonCode,
     board_no_edge_reason: boardNoEdgeReason,
     no_edge_reason: boardNoEdgeReason,
+    edge_type: result?.edge_type ?? null,
+    catalyst: result?.catalyst ?? null,
+    reasoning_chain: Array.isArray(result?.reasoning_chain) ? result.reasoning_chain : [],
+    invalidation_condition: result?.invalidation_condition ?? null,
+    time_sensitivity: result?.time_sensitivity ?? null,
     child_contracts: childContracts,
   };
 
@@ -657,6 +687,10 @@ export function createPipelineService(options = {}) {
             {
               venue: 'Kalshi',
               url,
+              source_packet: await buildOfficialSourcePacket({ venue: 'Kalshi', url }, {
+                alphaModel: runOptions.implications_model ?? defaultModels.implications,
+                validationModel: runOptions.validation_model ?? defaultModels.validation,
+              }),
             },
             {
               alphaModel: runOptions.implications_model ?? defaultModels.implications,

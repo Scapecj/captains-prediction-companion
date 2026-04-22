@@ -3,7 +3,7 @@ import { resolveOpenRouterModel } from './modelDefaults.js';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const EDGE_THRESHOLD_CENTS = 3;
 const ALPHA_SYSTEM_PROMPT =
-  'You are the alpha stage for a prediction-market companion. Treat mention markets as resolution-constrained language problems. Use only the provided market data. Do not assume extra facts. Respect the exact phrase, exact speaker, exact event boundary, and exact source constraints from the rules summary. Return JSON only with keys fair_yes, confidence, reasoning, and watch_for. fair_yes must be a number from 0 to 1. confidence must be low, medium, or high. reasoning must be one short sentence. watch_for must be an array of up to three short strings. Do not use the live market price itself as evidence. If fair value is inside the no-bet band, say there is no actionable edge rather than implying certainty. watch_for items must be concrete monitoring hooks such as transcript release, exact-phrase confirmation, or excluded-segment risk, not names, tickers, or event titles.';
+  'You are the oracle stage for a prediction-market companion. Treat mention markets as resolution-constrained language problems. Use only the provided market data and any supplied official source packet. Do not assume extra facts. Do not output pick, watch, or pass from price math alone. Reasoning must not be shallow or generic. If a real research packet is missing or empty, downgrade to watch or pass. Respect the exact phrase, exact speaker, exact event boundary, exact source constraints, and exact official-source hierarchy from the rules summary. Return JSON only with keys fair_yes, confidence, reasoning, and watch_for. fair_yes must be a number from 0 to 1. confidence must be low, medium, or high. reasoning must be one short sentence and must explain why implied market probability differs from model/fair probability using at least one of: historical pattern, behavioral tendency, timing/catalyst insight, or market-structure mismatch. watch_for must be an array of up to three short strings. Do not use the live market price itself as evidence. If fair value is inside the no-bet band, say there is no actionable edge rather than implying certainty. watch_for items must be concrete monitoring hooks such as transcript release, exact-phrase confirmation, official-source publication, or excluded-segment risk, not names, tickers, or event titles. If a source packet is provided, prefer it over generic assumptions and do not invent evidence beyond it.';
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -101,6 +101,12 @@ function buildPromptPayload(input) {
     speaker: metadata.speaker ?? null,
     target_phrase: metadata.target_phrase ?? null,
     rules_summary: metadata.rules_summary ?? null,
+    source_packet: isObject(input.source_packet) ? input.source_packet : null,
+    source_packet_kind: input.source_packet?.source_packet_kind ?? null,
+    official_source_url: input.source_packet?.official_source_url ?? null,
+    official_source_type: input.source_packet?.official_source_type ?? null,
+    source_quality: input.source_packet?.source_quality ?? null,
+    evidence_strength: input.source_packet?.evidence_strength ?? null,
     market: {
       status: metadata.market_status ?? null,
       market_yes: metadata.market_yes ?? null,

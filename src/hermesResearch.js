@@ -1,5 +1,6 @@
 import { buildEventMarketPlanSummary } from './eventMarketTool.js';
 import { readHermesResearchPacket, runHermesChat, stringifyCompactJson } from './hermesRuntime.js';
+import { buildOfficialSourcePacket } from './sourcePackets.js';
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -29,6 +30,7 @@ function buildHermesResearchPrompt(input = {}) {
     question: input.question ?? null,
     market_id: input.market_id ?? null,
     metadata: isObject(input.metadata) ? input.metadata : {},
+    source_packet: input.source_packet ?? null,
   };
 
   return [
@@ -43,7 +45,7 @@ function buildHermesResearchPrompt(input = {}) {
     .join('\n');
 }
 
-function normalizeResearchResult(result, input = {}) {
+function normalizeResearchResult(result, input = {}, sourcePacket = {}) {
   const summary = buildEventMarketPlanSummary(result);
   const childContracts = normalizeChildContracts(result?.child_contracts ?? summary?.market_view?.available_contracts ?? []);
 
@@ -55,26 +57,54 @@ function normalizeResearchResult(result, input = {}) {
     child_contracts: childContracts,
     board_no_edge_reason_code: result?.board_no_edge_reason_code ?? null,
     board_no_edge_reason: result?.board_no_edge_reason ?? null,
-    official_source_url: result?.official_source_url ?? null,
-    official_source_type: result?.official_source_type ?? null,
-    transcript_excerpt: result?.transcript_excerpt ?? null,
-    research_summary: result?.research_summary ?? summary?.summary?.one_line_reason ?? null,
-    evidence_strength: result?.evidence_strength ?? null,
-    source_quality: result?.source_quality ?? null,
+    official_source_url: result?.official_source_url ?? sourcePacket?.official_source_url ?? null,
+    official_source_type: result?.official_source_type ?? sourcePacket?.official_source_type ?? null,
+    transcript_excerpt: result?.transcript_excerpt ?? sourcePacket?.transcript_excerpt ?? null,
+    research_summary: result?.research_summary ?? sourcePacket?.research_summary ?? summary?.summary?.one_line_reason ?? null,
+    evidence_strength: result?.evidence_strength ?? sourcePacket?.evidence_strength ?? null,
+    source_quality: result?.source_quality ?? sourcePacket?.source_quality ?? null,
+    source_packet_kind: result?.source_packet_kind ?? sourcePacket?.source_packet_kind ?? null,
+    event_format: result?.event_format ?? sourcePacket?.event_format ?? null,
+    speaker_type: result?.speaker_type ?? sourcePacket?.speaker_type ?? null,
+    timing_relevance: result?.timing_relevance ?? sourcePacket?.timing_relevance ?? null,
+    why_valid_under_kalshi_rules: result?.why_valid_under_kalshi_rules ?? sourcePacket?.why_valid_under_kalshi_rules ?? null,
+    catalyst: result?.catalyst ?? sourcePacket?.catalyst ?? null,
+    reasoning_chain: Array.isArray(result?.reasoning_chain)
+      ? result.reasoning_chain
+      : Array.isArray(sourcePacket?.reasoning_chain)
+        ? sourcePacket.reasoning_chain
+        : [],
+    invalidation_condition: result?.invalidation_condition ?? sourcePacket?.invalidation_condition ?? null,
+    time_sensitivity: result?.time_sensitivity ?? sourcePacket?.time_sensitivity ?? null,
+    exact_phrase_status: result?.exact_phrase_status ?? sourcePacket?.exact_phrase_status ?? null,
+    official_source_candidates: Array.isArray(result?.official_source_candidates)
+      ? result.official_source_candidates
+      : Array.isArray(sourcePacket?.official_source_candidates)
+        ? sourcePacket.official_source_candidates
+        : [],
     unresolved_gaps: Array.isArray(result?.unresolved_gaps) ? result.unresolved_gaps : [],
     user_facing: summary,
   };
 }
 
 export async function runHermesResearch(input = {}, options = {}) {
-  const query = buildHermesResearchPrompt(input);
+  const sourcePacket = input.source_packet ?? (await buildOfficialSourcePacket(input, options));
+  const query = buildHermesResearchPrompt({
+    ...input,
+    source_packet: sourcePacket,
+  });
   const hermesResult = runHermesChat(query, {
     ...options,
     source: options.source ?? 'hermes-research',
   });
 
   if (hermesResult.ok && isObject(hermesResult.parsed)) {
-    return normalizeResearchResult(hermesResult.parsed, input);
+    return normalizeResearchResult({
+      ...sourcePacket,
+      ...hermesResult.parsed,
+      source_packet_kind: sourcePacket?.source_packet_kind ?? hermesResult.parsed?.source_packet_kind ?? null,
+      official_source_candidates: hermesResult.parsed?.official_source_candidates ?? sourcePacket?.official_source_candidates ?? [],
+    }, input);
   }
 
   return {
@@ -85,13 +115,24 @@ export async function runHermesResearch(input = {}, options = {}) {
     child_contracts: [],
     board_no_edge_reason_code: 'research_unavailable',
     board_no_edge_reason: 'Hermes research did not return usable structured evidence, so the pipeline fell back to local market analysis.',
-    official_source_url: null,
-    official_source_type: null,
-    transcript_excerpt: null,
-    research_summary: hermesResult.stderr?.trim() || 'Hermes returned no usable structured response.',
-    evidence_strength: 'low',
-    source_quality: 'unknown',
-    unresolved_gaps: ['Hermes research output unavailable'],
+    official_source_url: sourcePacket?.official_source_url ?? null,
+    official_source_type: sourcePacket?.official_source_type ?? null,
+    transcript_excerpt: sourcePacket?.transcript_excerpt ?? null,
+    research_summary: hermesResult.stderr?.trim() || sourcePacket?.research_summary || 'Hermes returned no usable structured response.',
+    evidence_strength: sourcePacket?.evidence_strength ?? 'low',
+    source_quality: sourcePacket?.source_quality ?? 'unknown',
+    source_packet_kind: sourcePacket?.source_packet_kind ?? null,
+    event_format: sourcePacket?.event_format ?? null,
+    speaker_type: sourcePacket?.speaker_type ?? null,
+    timing_relevance: sourcePacket?.timing_relevance ?? null,
+    why_valid_under_kalshi_rules: sourcePacket?.why_valid_under_kalshi_rules ?? null,
+    catalyst: sourcePacket?.catalyst ?? null,
+    reasoning_chain: Array.isArray(sourcePacket?.reasoning_chain) ? sourcePacket.reasoning_chain : [],
+    invalidation_condition: sourcePacket?.invalidation_condition ?? null,
+    time_sensitivity: sourcePacket?.time_sensitivity ?? null,
+    exact_phrase_status: sourcePacket?.exact_phrase_status ?? null,
+    official_source_candidates: Array.isArray(sourcePacket?.official_source_candidates) ? sourcePacket.official_source_candidates : [],
+    unresolved_gaps: ['Hermes research output unavailable', ...(Array.isArray(sourcePacket?.unresolved_gaps) ? sourcePacket.unresolved_gaps : [])],
     user_facing: buildEventMarketPlanSummary({
       user_facing: {
         source: {

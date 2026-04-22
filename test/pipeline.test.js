@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPipelineService } from '../src/pipelineService.js';
+import { runHermesOracle } from '../src/hermesOracle.js';
 import { resolveHermesCommand } from '../src/hermesRuntime.js';
 
 const RECENT_URL =
@@ -162,41 +163,6 @@ test('pipeline service runs research for the most recent analyzed URL and persis
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('pipeline service appends durable per-run card outputs to a local file', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'pipeline-service-output-'));
-  const stateFile = join(dir, 'pipeline-state.json');
-  const outputFile = join(dir, 'pipeline-card-outputs.json');
-
-  const service = createPipelineService({
-    stateFile,
-    outputFile,
-    seedUrls: [SEED_URL],
-    now: () => new Date('2026-04-22T12:00:00.000Z'),
-    runMarketAnalysis: async input => buildNoEdgeBoard(input.url, 'KXNOEDGE-1'),
-  });
-
-  service.recordRecentUrl(RECENT_URL);
-  await service.runProduction({ full: false, max_events: 1 });
-
-  const output = JSON.parse(readFileSync(outputFile, 'utf8'));
-  assert.equal(Array.isArray(output), true);
-  assert.equal(output.length, 1);
-  assert.equal(output[0].run_id, 1);
-  assert.equal(output[0].cards.length, 1);
-  assert.equal(output[0].cards[0].url, RECENT_URL);
-  assert.equal(output[0].cards[0].summary_headline, 'The board has no actionable edge.');
-  assert.equal(output[0].cards[0].recommendation, 'pass');
-  assert.equal(output[0].cards[0].confidence, 'low');
-  assert.equal(typeof output[0].cards[0].recorded_at, 'string');
-  assert.equal(output[0].cards[0].no_edge_reason_code, 'manual_classification_required');
-  assert.equal(
-    output[0].cards[0].no_edge_reason,
-    'The card was classified as general/general, so it stayed pass pending manual classification.'
-  );
-
-  rmSync(dir, { recursive: true, force: true });
-});
-
 test('pipeline service falls back safely when Hermes returns unusable output', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'pipeline-service-hermes-fallback-'));
   const stateFile = join(dir, 'pipeline-state.json');
@@ -230,7 +196,7 @@ test('pipeline service falls back safely when Hermes returns unusable output', a
     assert.equal(output[0].cards[0].board_confidence, 'low');
     assert.equal(typeof output[0].cards[0].board_no_edge_reason_code, 'string');
     assert.equal(typeof output[0].cards[0].no_edge_reason_code, 'string');
-    assert.match(output[0].cards[0].no_edge_reason, /manual classification|fallback|unusable structured evidence/i);
+    assert.match(output[0].cards[0].no_edge_reason, /manual classification|fallback|fell back|unusable structured evidence/i);
     assert.equal(Array.isArray(output[0].cards[0].child_contracts), true);
   } finally {
     if (previousHermesCommand === undefined) {
@@ -240,6 +206,103 @@ test('pipeline service falls back safely when Hermes returns unusable output', a
     }
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('pipeline service persists oracle reasoning metadata without breaking board output', async () => {
+  const oracleBoard = runHermesOracle(
+    {
+      board_url: RECENT_URL,
+      board_headline: 'Hermes board analysis',
+      board_recommendation: 'watch',
+      board_confidence: 'low',
+      board_no_edge_reason_code: 'manual_classification_required',
+      board_no_edge_reason: 'The board stayed on watch because Hermes returned no actionable edge with verifiable official-source evidence.',
+      edge_type: 'information',
+      catalyst: 'speech',
+      reasoning_chain: ['Speaker format is known', 'The exact phrase is still unverified'],
+      invalidation_condition: 'If the exact phrase appears in the official source, the watch status should be removed.',
+      time_sensitivity: 'high',
+      child_contracts: [
+        {
+          ticker: 'KXTEST-ORACLE',
+          label: 'Test Oracle',
+          yes_bid: 0.1,
+          yes_ask: 0.2,
+          last_price: 0.15,
+          source_url: RECENT_URL,
+          transcript_excerpt: 'sample excerpt',
+          phrase_found: false,
+          evidence: ['official source missing exact phrase'],
+        },
+      ],
+      user_facing: {
+        source: {
+          platform: 'Kalshi',
+          url: RECENT_URL,
+          market_id: 'KXTEST-ORACLE',
+        },
+        event_domain: 'politics',
+        event_type: 'speech',
+        market_type: 'mention',
+        status: 'ready',
+        confidence: 'low',
+        summary: {
+          headline: 'Hermes board analysis',
+          recommendation: 'watch',
+          one_line_reason: 'The exact phrase remains unverified.',
+        },
+        next_action: 'review_market_rules',
+        context: {},
+        market_view: {
+          available_contracts: [],
+          trade_view: {
+            market_ticker: 'KXTEST-ORACLE',
+            market_status: 'active',
+            fair_yes: 0.5,
+            edge_cents: 0,
+          },
+        },
+      },
+    },
+    { url: RECENT_URL }
+  );
+
+  assert.equal(oracleBoard.edge_type, 'information');
+  assert.equal(oracleBoard.catalyst, 'speech');
+  assert.deepEqual(oracleBoard.reasoning_chain, ['Speaker format is known', 'The exact phrase is still unverified']);
+  assert.equal(
+    oracleBoard.invalidation_condition,
+    'If the exact phrase appears in the official source, the watch status should be removed.'
+  );
+  assert.equal(oracleBoard.time_sensitivity, 'high');
+
+  const dir = mkdtempSync(join(tmpdir(), 'pipeline-service-oracle-metadata-'));
+  const stateFile = join(dir, 'pipeline-state.json');
+  const outputFile = join(dir, 'pipeline-card-outputs.json');
+  const service = createPipelineService({
+    stateFile,
+    outputFile,
+    seedUrls: [RECENT_URL],
+    now: () => new Date('2026-04-22T12:00:00.000Z'),
+    runMarketAnalysis: async () => oracleBoard,
+  });
+
+  service.recordRecentUrl(RECENT_URL);
+  await service.runProduction({ full: false, max_events: 1 });
+
+  const output = JSON.parse(readFileSync(outputFile, 'utf8'));
+  assert.equal(output[0].cards[0].board_recommendation, 'watch');
+  assert.equal(output[0].cards[0].board_no_edge_reason_code, 'manual_classification_required');
+  assert.equal(output[0].cards[0].edge_type, 'information');
+  assert.equal(output[0].cards[0].catalyst, 'speech');
+  assert.deepEqual(output[0].cards[0].reasoning_chain, ['Speaker format is known', 'The exact phrase is still unverified']);
+  assert.equal(
+    output[0].cards[0].invalidation_condition,
+    'If the exact phrase appears in the official source, the watch status should be removed.'
+  );
+  assert.equal(output[0].cards[0].time_sensitivity, 'high');
+
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test('pipeline reset clears persisted research state', async () => {

@@ -19,6 +19,15 @@ function normalizeChildContracts(value) {
   }));
 }
 
+function normalizeReasoningChain(value, fallback = []) {
+  if (!Array.isArray(value)) return fallback;
+  const cleaned = value
+    .filter(item => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean);
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
 function hasActionableBoard(result) {
   const recommendation = String(result?.board_recommendation ?? result?.summary?.recommendation ?? '').trim().toLowerCase();
   return recommendation === 'buy_yes' || recommendation === 'buy_no';
@@ -45,7 +54,21 @@ export function runHermesOracle(researchResult = {}, input = {}, options = {}) {
     research_summary: researchResult?.research_summary ?? summary?.summary?.one_line_reason ?? null,
     evidence_strength: researchResult?.evidence_strength ?? null,
     source_quality: researchResult?.source_quality ?? null,
+    source_packet_kind: researchResult?.source_packet_kind ?? null,
+    event_format: researchResult?.event_format ?? null,
+    speaker_type: researchResult?.speaker_type ?? null,
+    timing_relevance: researchResult?.timing_relevance ?? null,
+    why_valid_under_kalshi_rules: researchResult?.why_valid_under_kalshi_rules ?? null,
     unresolved_gaps: Array.isArray(researchResult?.unresolved_gaps) ? researchResult.unresolved_gaps : [],
+    edge_type:
+      researchResult?.edge_type ??
+      (boardRecommendation === 'buy_yes' || boardRecommendation === 'buy_no' ? 'information' : 'none'),
+    catalyst: researchResult?.catalyst ?? null,
+    reasoning_chain: normalizeReasoningChain(researchResult?.reasoning_chain, []),
+    invalidation_condition: researchResult?.invalidation_condition ?? null,
+    time_sensitivity: researchResult?.time_sensitivity ?? null,
+    exact_phrase_status: researchResult?.exact_phrase_status ?? null,
+    official_source_candidates: Array.isArray(researchResult?.official_source_candidates) ? researchResult.official_source_candidates : [],
     user_facing: summary,
   };
 

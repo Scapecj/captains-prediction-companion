@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export const HERMES_COMMAND = process.env.HERMES_COMMAND ?? process.env.HERMES_CLI ?? 'hermes';
+export function resolveHermesCommand() {
+  return process.env.HERMES_COMMAND ?? process.env.HERMES_CLI ?? 'hermes';
+}
+
 export const HERMES_RESEARCH_PACKET = resolve(__dirname, '../prompts/hermes-kalshi-mention-research.md');
 export const DEFAULT_HERMES_SKILLS = [
   'research-source-scraping',
@@ -114,7 +117,7 @@ export function runHermesChat(query, options = {}) {
   }
   args.push('-q', String(query));
 
-  const result = spawnSync(HERMES_COMMAND, args, {
+  const result = spawnSync(resolveHermesCommand(), args, {
     encoding: 'utf8',
     timeout: options.timeout ?? 120000,
     env: {

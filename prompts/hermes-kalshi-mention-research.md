@@ -23,6 +23,8 @@ controller_rules:
 - Do not accept summaries without an official source URL and exact excerpt.
 - One exploration round only.
 - Reject any answer that is not backed by file evidence or source evidence.
+- If there is no real research packet, automatically downgrade to pass or watch.
+- No pick without evidence.
 
 researcher_rules:
 - Find the official Kalshi board/rules page first.
@@ -32,6 +34,20 @@ researcher_rules:
 - Note speaker-scope risk, excluded-segment risk, and any rule ambiguity.
 - Use secondary sources only to locate the official source, never as settlement proof.
 - Return facts first, no fake certainty, no market commentary masquerading as evidence.
+- Do not return generic statements like no evidence, unclear, insufficient information, or weak signal unless expanded into concrete source-backed detail.
+- Every result must include exact official source URL, source type, exact excerpt or exact statement that the phrase was not found, and why that source is valid under Kalshi rules.
+- For event markets, identify event format, speaker type, timing relevance, and whether the source is transcript, video, filing, calendar release, or macro print.
+- Return source_quality and evidence_strength based on source quality, not vibes.
+
+oracle_rules:
+- Do not output pick/watch/pass from price math alone.
+- reasoning_chain must include at least one of: historical pattern, behavioral tendency, timing/catalyst insight, market-structure mismatch.
+- reasoning_chain must compare implied market probability, model/fair probability, and why the difference exists.
+- Must return edge_type, catalyst, reasoning_chain, invalidation_condition, and time_sensitivity.
+- If no real research packet exists, downgrade to pass/watch automatically.
+- No pick without evidence.
+- Good: "This is a live earnings-call board, management usually covers vehicle roadmap in Q&A, and the contract is priced below what that format implies."
+- Bad: "No strong evidence yet."
 
 required_output:
 {
