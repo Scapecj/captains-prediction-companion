@@ -10,6 +10,7 @@ import {
   buildFocusedKalshiMarketPlan,
 } from '../src/eventMarketTool.js';
 import { buildEventMarketWorkflowPrompt } from '../src/eventMarketPrompt.js';
+import { analyzeKalshiMarketUrlTool } from '../src/server.js';
 
 const TRUMP_EVENT_URL =
   'https://kalshi.com/markets/kxtrumpmentionb/trump-mention-b/KXTRUMPMENTIONB-26MAR27?utm_source=kalshiapp_eventpage';
@@ -596,4 +597,48 @@ test('event market prompt primes the backend plan workflow', () => {
   assert.match(prompt.messages[0].content.text, /do not manually interpret/i);
   assert.match(prompt.messages[0].content.text, /exactly the compact user-facing card json/i);
   assert.match(prompt.messages[1].content.text, /KX123/);
+});
+
+
+test('analyze_kalshi_market_url tool returns compact card JSON for a flagship URL', async () => {
+  const fetchImpl = createFetchStub(
+    new Map([[`${KALSHI_BASE_URL}/events/KXTRUMPMENTIONB-26MAR27`, buildTrumpEventPayload()]])
+  );
+
+  const alphaResult = {
+    status: 'watch',
+    confidence: 'medium',
+    summary: {
+      headline: 'Trump mention market ready for compact card output.',
+      recommendation: 'watch',
+      one_line_reason: 'The URL resolves to a specific mention contract with live pricing.',
+    },
+    next_action: 'monitor_live_contract',
+  };
+
+  const alphaFetchImpl = createAlphaFetchStub(alphaResult);
+
+  const toolResult = await analyzeKalshiMarketUrlTool(
+    { url: TRUMP_EVENT_URL },
+    { fetchImpl, alphaFetchImpl }
+  );
+
+  assert.equal(Array.isArray(toolResult.content), true);
+  assert.equal(toolResult.content[0].type, 'text');
+
+  const card = JSON.parse(toolResult.content[0].text);
+  assert.equal(card.source.platform, 'Kalshi');
+  assert.equal(
+    card.source.url,
+    'https://kalshi.com/markets/kxtrumpmentionb/trump-mention-b/KXTRUMPMENTIONB-26MAR27-BIDE?utm_source=kalshiapp_eventpage'
+  );
+  assert.equal(card.market_type, 'mention');
+  assert.equal(card.summary.recommendation, 'pass');
+  assert.match(
+    card.summary.headline,
+    /needs? more (detail|event detail) before the app can (build a card|score it)|compact card output/i
+  );
+
+  assert.equal(toolResult.structuredContent.market_type, card.market_type);
+  assert.equal(toolResult.structuredContent.source.url, card.source.url);
 });

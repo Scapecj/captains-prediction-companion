@@ -50,6 +50,11 @@ function buildCardToolResult(result, { includeHidden = false } = {}) {
   };
 }
 
+export async function analyzeKalshiMarketUrlTool({ url }, options = {}) {
+  const result = await buildFocusedKalshiMarketPlan({ url, venue: 'Kalshi' }, options);
+  return buildCardToolResult(result);
+}
+
 function createServer() {
   const server = new McpServer(
     { name: APP_NAME, version: APP_VERSION },
@@ -163,10 +168,7 @@ function createServer() {
         url: z.string().describe('Kalshi market URL to analyze'),
       },
     },
-    async ({ url }) => {
-      const result = await buildFocusedKalshiMarketPlan({ url, venue: 'Kalshi' });
-      return buildCardToolResult(result);
-    }
+    async ({ url }) => analyzeKalshiMarketUrlTool({ url })
   );
 
   server.registerPrompt(
@@ -305,7 +307,9 @@ async function main() {
   });
 }
 
-main().catch(error => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(error => {
+    console.error(error);
+    process.exit(1);
+  });
+}

@@ -1,63 +1,47 @@
-# AGENTS.md
+# AGENTS
 
-> ChatGPT-first prediction market assistant. Remote MCP server backed by a Node.js app that accepts Kalshi market URLs, builds event-market and mention-market analysis plans, and returns compact user-facing cards.
+This repo now supports a lightweight operator system alongside the app code.
 
-## Commands
+## Purpose
+Use this repo as both:
+1. the application codebase
+2. a file-based operator workspace
 
-```bash
-# Install
-npm install
+## Operator folders
+- `agents/` = role definitions
+- `skills/` = reusable workflows
+- `channels/` = session logs
+- `state/` = persistent working state
+- `runbooks/` = operating instructions
+- `prompts/` = reusable task packets
 
-# Development
-npm run dev       # Start server with --watch (auto-restart on file changes)
-npm start         # Start server (production)
-npm test          # Run tests (node --test)
-```
+## Active agents
 
-## Project Structure
+### controller
+Location: `agents/controller/`
 
-```
-src/
-├── server.js              # HTTP + MCP server, tool/prompt registration
-├── kalshiApi.js           # Kalshi REST API client, URL parsing, market enrichment
-├── eventMarketTool.js     # Market plan builder
-├── eventMarketPrompt.js   # Workflow prompt builder
-├── eventMarketAlpha.js    # Alpha / edge calculation
-├── eventMarketContract.js # Output contract types
-├── modelDefaults.js       # OpenRouter model resolution helpers
-├── noteStore.js           # Optional note storage (ENABLE_NOTE_TOOLS)
-├── storage.js             # Persistent JSON storage helpers
-└── env.js                 # .env loader
-public/
-└── index.html             # Browser dashboard served at GET /
-test/
-└── server.test.js         # Node built-in test runner
-```
+Role:
+- define the real task
+- lock scope
+- prevent drift
+- require proof
+- choose the next smallest useful action
 
-## API / MCP Surfaces
+### researcher
+Location: `agents/researcher/`
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | Browser dashboard |
-| `GET /healthz` | Health check JSON |
-| `POST /mcp` | MCP transport for ChatGPT and compatible clients |
+Role:
+- gather repo facts
+- summarize architecture and gaps
+- support controller decisions with evidence
 
-MCP tools exposed: `app_status`, `analyze_kalshi_market_url`
-MCP prompt exposed: `event_market_workflow`
-Optional tools (set `ENABLE_NOTE_TOOLS=true`): `remember_note`, `list_notes`, `search_notes`, `delete_note`
+## Working rules
+- one exploration round only
+- no brainstorming after convergence
+- use files as source of truth
+- do not assume memory beyond `channels/` and `state/`
+- do not claim completion without proof
 
-## Environment
-
-```bash
-# .env (copy from .env.example, gitignored)
-OPENROUTER_API_KEY=sk-or-v1-...  # Required: OpenRouter model provider key
-OPENROUTER_MODEL=openrouter/free # Optional: model override (default: openrouter/free)
-PORT=3000                        # Optional: server port (default: 3000)
-ENABLE_NOTE_TOOLS=false          # Optional: expose note storage MCP tools
-APP_DATA_FILE=./data/notes.json  # Optional: note storage path
-```
-
-## Git
-
-- Format: `<type>: <description>` (feat, fix, docs, refactor, chore)
-- Never commit: API keys, `data/` contents, `.env`
+## App/operator boundary
+Operator files must stay separate from app runtime code.
+Do not make frontend or src depend on operator folders unless intentionally building that feature later.
