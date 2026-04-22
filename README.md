@@ -1,8 +1,10 @@
 # Captains Prediction Companion
 
-ChatGPT-first prediction market assistant focused on **Kalshi event and mention markets**.
+Captains Prediction Companion is the umbrella app surface for the trading bot, companion UI, and API-backed features.
 
-The primary integration surface is a **remote MCP server**. A browser dashboard is the next expansion step.
+The intended production deployment is same-origin:
+
+Cloudflare DNS -> VPS -> Nginx -> frontend at `/` + `/api/*` proxy -> Node backend -> PostgreSQL
 
 ## What it does
 
@@ -10,63 +12,66 @@ The primary integration surface is a **remote MCP server**. A browser dashboard 
 - Builds event-market and mention-market analysis plans
 - Returns compact, user-facing market cards
 - Exposes MCP tools over HTTP for ChatGPT and compatible clients
-- Serves a lightweight browser UI at `GET /`
+- Serves a browser UI at `GET /`
 
 ## Runtime surfaces
 
 | Endpoint | Purpose |
 |---|---|
 | `GET /` | Browser dashboard UI |
+| `GET /health` | Health check JSON |
 | `GET /healthz` | Health check JSON |
 | `POST /mcp` | MCP transport for ChatGPT / compatible clients |
+| `GET /pipeline/status` | Pipeline status |
+| `GET /pipeline/outputs/latest` | Latest persisted board record |
 
 ## Quick start
 
 ```bash
 cp .env.example .env
-# Fill in OPENROUTER_API_KEY
 npm install
 npm start
 ```
 
 Then open:
 - `http://localhost:3000/` — browser dashboard
-- `http://localhost:3000/healthz` — health check
+- `http://localhost:3000/health` — health check
 - `http://localhost:3000/mcp` — MCP endpoint
 
 ## Environment
 
-See `.env.example` for all supported variables. Required:
-- `OPENROUTER_API_KEY` — model provider key (OpenRouter)
+Required for the backend runtime:
+- `OPENROUTER_API_KEY`
 
-Optional:
+Common optional variables:
 - `OPENROUTER_MODEL` — defaults to `openrouter/free`
 - `PORT` — defaults to `3000`
 - `ENABLE_NOTE_TOOLS` — enables note storage MCP tools (default: `false`)
+- `APP_DATA_FILE`
+- `PIPELINE_STATE_FILE`
+- `PIPELINE_OUTPUT_FILE`
+- `PIPELINE_SEED_URLS`
+- `PIPELINE_CALENDAR_URL`
+- `PIPELINE_CALENDAR_LIMIT`
+- `HERMES_COMMAND`
+
+Frontend environment for production:
+- `BACKEND_URL=http://127.0.0.1:8000`
+- `MCP_SERVER_URL=http://127.0.0.1:8000/mcp`
 
 ## Project structure
 
 ```
-src/
-├── server.js              # HTTP + MCP server, serves GET /
-├── env.js                 # Env loader
-├── eventMarketTool.js     # Market plan builder
-├── eventMarketPrompt.js   # Workflow prompt builder
-├── eventMarketAlpha.js    # Alpha / edge calculation
-├── eventMarketContract.js # Output contract types
-├── kalshiApi.js           # Kalshi API client
-├── noteStore.js           # Optional note storage
-├── modelDefaults.js       # LLM model defaults
-└── storage.js             # Persistent storage helpers
-public/
-└── index.html             # Browser dashboard
+frontend/                 # Next.js app + same-origin /api proxy routes
+src/                      # Node backend + MCP server
+public/                   # Static assets for the backend-served dashboard shell
+deploy/                   # VPS deployment examples
 ```
 
 ## ChatGPT integration
 
-See [CONNECT_CHATGPT.md](./CONNECT_CHATGPT.md) for full setup instructions.
+See [CONNECT_CHATGPT.md](./CONNECT_CHATGPT.md) for the MCP setup path.
 
-## Known failure modes
+## Deployment notes
 
-- If the market card shows `fair_yes: null` — check that `OPENROUTER_API_KEY` is set in the running process environment. A healthy `/healthz` alone does not prove alpha is enabled.
-- If the public URL shows stale data — rotate the tunnel. Old `trycloudflare` links can stay attached to outdated processes.
+See [docs/deployment-vps.md](./docs/deployment-vps.md).

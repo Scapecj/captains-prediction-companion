@@ -280,7 +280,7 @@ export function createHttpRequestHandler({ pipelineService = null, noteStore = n
       return;
     }
 
-    if (req.url === '/healthz') {
+    if (req.url === '/health' || req.url === '/healthz') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         ok: true,
