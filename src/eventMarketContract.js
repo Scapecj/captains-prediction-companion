@@ -134,16 +134,16 @@ function inferDomain(input) {
     return 'sports';
   }
 
+  if (/\b(earnings|earnings call|quarter|quarterly results|revenue|guidance|investor relations|transcript|ceo|cfo|10-q|8-k)\b/.test(haystack)) {
+    return 'corporate';
+  }
+
   if (/\b(election|politics|president|congress|senate|house|debate|campaign|white house|c-span|press conference|cpac|governor|attorney general|secretary)\b/.test(haystack)) {
     return 'politics';
   }
 
   if (/\b(inflation|fed|fomc|rates|cpi|jobs|unemployment|gdp|powell|treasury)\b/.test(haystack)) {
     return 'macro';
-  }
-
-  if (/\b(earnings|earnings call|quarter|revenue|guidance|investor relations|transcript|ceo|cfo)\b/.test(haystack)) {
-    return 'corporate';
   }
 
   if (/\bmention(s)?\b|\bphrase\b|\bword\b|\bsaid\b|\bsays\b|\bsaying\b|\bspeech\b|\bremarks\b/.test(haystack)) {
@@ -188,14 +188,16 @@ function inferEventType(input, domain) {
     return 'interview';
   }
   if (
+    /\bearnings\b|\bearnings call\b|\bquarterly results\b|\binvestor relations\b|\btranscript\b|\bq[1-4]\b/.test(haystack)
+  ) {
+    return 'earnings_call';
+  }
+  if (
     /\bspeech\b|\bremarks\b|\baddress\b|\brally\b/.test(haystack) ||
     /\bwhat will\b.+\bsay during\b/.test(haystack) ||
     /\bif\b.+\bsays?\b.+\bas part of\b/.test(haystack)
   ) {
     return 'speech';
-  }
-  if (/\bearnings\b|\bearnings call\b|\bquarterly results\b|\binvestor relations\b|\btranscript\b|\bq[1-4]\b/.test(haystack)) {
-    return 'earnings_call';
   }
   if (domain === 'sports') {
     if (/\bncaamb\b|\bncaa\b|\bcollege basketball\b|\bmarch madness\b/.test(haystack)) {

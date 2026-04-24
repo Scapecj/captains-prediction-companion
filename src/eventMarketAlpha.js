@@ -163,7 +163,7 @@ function normalizeWatchFor(value) {
 function buildPromptPayload(input) {
   const metadata = isObject(input.metadata) ? input.metadata : {};
   const availableContracts = Array.isArray(metadata.available_contracts)
-    ? metadata.available_contracts.slice(0, 5).map(contract => ({
+    ? metadata.available_contracts.map(contract => ({
         market_ticker: contract.market_ticker ?? null,
         label: contract.label ?? null,
         market_yes: contract.market_yes ?? null,

@@ -11,6 +11,7 @@ import {
   buildEventMarketPlanSummary,
   buildFocusedKalshiMarketPlan,
 } from '../src/eventMarketTool.js';
+import { buildOfficialSourcePacket } from '../src/sourcePackets.js';
 import { buildEventMarketWorkflowPrompt } from '../src/eventMarketPrompt.js';
 import { analyzeKalshiMarketUrlTool, createHttpRequestHandler } from '../src/server.js';
 
@@ -128,6 +129,92 @@ function buildTrumpGenericEventPayload() {
         yes_bid_dollars: '0.1200',
         yes_ask_dollars: '0.1600',
         last_price_dollars: '0.1400',
+      },
+    ],
+  };
+}
+
+function buildTrumpLargeEventPayload() {
+  return {
+    event: {
+      category: 'Mentions',
+      event_ticker: 'KXTRUMPMENTIONB-26MAR27',
+      series_ticker: 'KXTRUMPMENTIONB',
+      sub_title: 'Remarks to Farmers',
+      title: 'What will Donald Trump say during Remarks to Farmers?',
+    },
+    markets: [
+      {
+        ticker: 'KXTRUMPMENTIONB-26MAR27-BIDE',
+        title: 'What will Donald Trump say during Remarks to Farmers?',
+        yes_sub_title: 'Biden',
+        custom_strike: { Word: 'Biden' },
+        rules_primary:
+          'If Donald Trump says Biden as part of Remarks to Farmers, then the market resolves to Yes.',
+        status: 'active',
+        yes_bid_dollars: '0.8200',
+        yes_ask_dollars: '0.8600',
+        last_price_dollars: '0.8400',
+      },
+      {
+        ticker: 'KXTRUMPMENTIONB-26MAR27-TARI',
+        title: 'What will Donald Trump say during Remarks to Farmers?',
+        yes_sub_title: 'Tariff',
+        custom_strike: { Word: 'Tariff' },
+        rules_primary:
+          'If Donald Trump says Tariff as part of Remarks to Farmers, then the market resolves to Yes.',
+        status: 'active',
+        yes_bid_dollars: '0.6100',
+        yes_ask_dollars: '0.6500',
+        last_price_dollars: '0.6300',
+      },
+      {
+        ticker: 'KXTRUMPMENTIONB-26MAR27-CHIN',
+        title: 'What will Donald Trump say during Remarks to Farmers?',
+        yes_sub_title: 'China',
+        custom_strike: { Word: 'China' },
+        rules_primary:
+          'If Donald Trump says China as part of Remarks to Farmers, then the market resolves to Yes.',
+        status: 'active',
+        yes_bid_dollars: '0.5400',
+        yes_ask_dollars: '0.5800',
+        last_price_dollars: '0.5600',
+      },
+      {
+        ticker: 'KXTRUMPMENTIONB-26MAR27-POWL',
+        title: 'What will Donald Trump say during Remarks to Farmers?',
+        yes_sub_title: 'Powell',
+        custom_strike: { Word: 'Powell' },
+        rules_primary:
+          'If Donald Trump says Powell as part of Remarks to Farmers, then the market resolves to Yes.',
+        status: 'active',
+        yes_bid_dollars: '0.4300',
+        yes_ask_dollars: '0.4700',
+        last_price_dollars: '0.4500',
+      },
+      {
+        ticker: 'KXTRUMPMENTIONB-26MAR27-AIXX',
+        title: 'What will Donald Trump say during Remarks to Farmers?',
+        yes_sub_title: 'AI',
+        custom_strike: { Word: 'AI' },
+        rules_primary:
+          'If Donald Trump says AI as part of Remarks to Farmers, then the market resolves to Yes.',
+        status: 'active',
+        yes_bid_dollars: '0.2200',
+        yes_ask_dollars: '0.2600',
+        last_price_dollars: '0.2400',
+      },
+      {
+        ticker: 'KXTRUMPMENTIONB-26MAR27-EPST',
+        title: 'What will Donald Trump say during Remarks to Farmers?',
+        yes_sub_title: 'Epstein',
+        custom_strike: { Word: 'Epstein' },
+        rules_primary:
+          'If Donald Trump says Epstein as part of Remarks to Farmers, then the market resolves to Yes.',
+        status: 'active',
+        yes_bid_dollars: '0.0900',
+        yes_ask_dollars: '0.1100',
+        last_price_dollars: '0.1000',
       },
     ],
   };
@@ -501,44 +588,53 @@ test('politics mention event metadata classifies as politics speech instead of g
   assert.equal(result.user_facing.context.event_name, 'CPAC Ronald Reagan Dinner');
 });
 
-test('focused kalshi market plan auto-selects the top contract from a board url', async () => {
-  const eventPayload = buildTrumpGenericEventPayload();
-  const focusTicker = 'KXTRUMPMENTION-26MAR27-CHIN';
+test('event market board previews and alpha payload include more than five contracts', async () => {
+  const eventPayload = buildTrumpLargeEventPayload();
+  const focusTicker = 'KXTRUMPMENTIONB-26MAR27-BIDE';
   const marketPayload = {
     market: {
       ...eventPayload.markets[0],
-      event_ticker: 'KXTRUMPMENTION-26MAR27',
+      event_ticker: 'KXTRUMPMENTIONB-26MAR27',
       rules_secondary: 'Video of the remarks will be used as the primary settlement source.',
     },
   };
   const orderbookPayload = {
     orderbook_fp: {
-      yes_dollars: [[0.78, 120]],
-      no_dollars: [[0.22, 80]],
+      yes_dollars: [[0.86, 100]],
+      no_dollars: [[0.18, 40]],
     },
   };
+  let observedQuery = '';
   const fetchImpl = createFetchStub(
     new Map([
-      [`${KALSHI_BASE_URL}/events/KXTRUMPMENTION-26MAR27`, eventPayload],
       [`${KALSHI_BASE_URL}/markets/${focusTicker}`, marketPayload],
       [`${KALSHI_BASE_URL}/markets/${focusTicker}/orderbook`, orderbookPayload],
+      [`${KALSHI_BASE_URL}/events/KXTRUMPMENTIONB-26MAR27`, eventPayload],
     ])
   );
-
-  const result = await buildFocusedKalshiMarketPlan(
+  const alphaRunner = createAlphaRunnerStub(
     {
-      venue: 'Kalshi',
-      url: TRUMP_GENERIC_EVENT_URL,
+      fair_yes: 0.92,
+      confidence: 'high',
+      reasoning: 'The contract can still clear on exact wording.',
+      watch_for: ['official transcript'],
     },
-    { fetchImpl }
+    (query) => {
+      observedQuery = query;
+    }
   );
 
-  assert.equal(result.user_facing.status, 'needs_pricing');
-  assert.equal(result.user_facing.summary.recommendation, 'watch');
-  assert.equal(result.user_facing.source.market_id, focusTicker);
-  assert.equal(result.user_facing.market_view.target_phrase, 'China');
-  assert.equal(result.user_facing.market_view.trade_view.market_ticker, focusTicker);
-  assert.equal(result.user_facing.market_view.trade_view.market_yes, 0.76);
+  const result = await buildEventMarketPlan(
+    {
+      venue: 'Kalshi',
+      market_id: focusTicker,
+      url: TRUMP_EVENT_URL,
+    },
+    { fetchImpl, alphaRunner }
+  );
+
+  assert.equal(result.user_facing.market_view.available_contracts.length, 6);
+  assert.match(observedQuery, /\"market_ticker\":\"KXTRUMPMENTIONB-26MAR27-EPST\"/);
 });
 
 test('event market tool routes earnings markets into the mention workflow', async () => {
@@ -551,6 +647,33 @@ test('event market tool routes earnings markets into the mention workflow', asyn
 
   assert.equal(result.plan.domain, 'mention');
   assert.equal(result.workflow.name, 'mention-market-research');
+});
+
+test('corporate earnings source packets route to issuer SEC search candidates instead of generic mention fallback', async () => {
+  const result = await buildOfficialSourcePacket({
+    venue: 'Kalshi',
+    domain: 'earnings',
+    title: 'What will American Express say during earnings?',
+    question: 'What will American Express say during earnings?',
+    market_id: 'KXAXPMENTION-TEST',
+    metadata: {
+      company: 'American Express',
+      event_name: 'American Express earnings call',
+      target_phrase: 'revenue',
+    },
+  });
+
+  assert.equal(result.event_domain, 'corporate');
+  assert.equal(result.event_type, 'earnings_call');
+  assert.equal(result.market_type, 'mention');
+  assert.equal(result.source_packet_kind, 'earnings');
+  assert.equal(result.source_quality, 'high');
+  assert.equal(result.evidence_strength, 'medium');
+  assert.match(result.official_source_url, /sec\.gov\/edgar\/search/);
+  assert.equal(result.official_source_type, 'sec_earnings_search');
+  assert.ok(result.official_source_candidates.some(candidate => candidate.type === 'sec_8k_company_search'));
+  assert.ok(result.reasoning_chain.some(line => /American Express/i.test(line)));
+  assert.ok(result.unresolved_gaps.length > 0);
 });
 
 test('event market tool routes macro markets into the macro workflow', async () => {

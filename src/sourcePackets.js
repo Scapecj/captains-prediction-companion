@@ -137,6 +137,70 @@ function isTeslaEarningsMarket(input = {}) {
   return /tesla|tsla/.test(text) && /(earnings|quarter|full self driving|fsd|optimus|robotaxi|battery|delivery)/.test(text);
 }
 
+function extractEarningsIssuerHint(input = {}) {
+  const metadata = isObject(input.metadata) ? input.metadata : {};
+  const directHint = [
+    metadata.company,
+    metadata.company_name,
+    metadata.issuer,
+    metadata.issuer_name,
+    metadata.speaker,
+  ].find(value => normalizeString(value));
+
+  if (directHint) {
+    return compactWhitespace(directHint);
+  }
+
+  const textCandidates = [input.title, input.question, input.url].map(normalizeString).filter(Boolean);
+  for (const candidate of textCandidates) {
+    const mentionMatch = candidate.match(/\bwhat will\s+(.+?)\s+(?:say|announce|report|discuss)\b/i);
+    if (mentionMatch?.[1]) {
+      const cleaned = compactWhitespace(
+        mentionMatch[1]
+          .replace(/[-_/]+/g, ' ')
+          .replace(/\b(?:earnings(?: call)?|quarter(?:ly)?|q[1-4]|mention|call|report|results|update|transcript|guidance|investor relations|ir|board|market)\b/gi, ' ')
+      );
+      if (cleaned) return cleaned;
+    }
+
+    const quotedMatch = candidate.match(/"([^"]{2,})"/) ?? candidate.match(/'([^']{2,})'/);
+    if (quotedMatch?.[1]) {
+      const cleaned = compactWhitespace(
+        quotedMatch[1]
+          .replace(/[-_/]+/g, ' ')
+          .replace(/\b(?:earnings(?: call)?|quarter(?:ly)?|q[1-4]|mention|call|report|results|update|transcript|guidance|investor relations|ir|board|market)\b/gi, ' ')
+      );
+      if (cleaned) return cleaned;
+    }
+  }
+
+  if (input.url) {
+    try {
+      const parsed = new URL(String(input.url));
+      const segments = parsed.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+      for (const segment of segments) {
+        if (!/(earnings|quarter|q[1-4]|transcript|guidance|revenue|investor relations|ir)/i.test(segment)) continue;
+        const cleaned = compactWhitespace(
+          segment
+            .replace(/\.html?$/i, '')
+            .replace(/[-_/]+/g, ' ')
+            .replace(/\b(?:earnings(?: call)?|quarter(?:ly)?|q[1-4]|mention|call|report|results|update|transcript|guidance|investor relations|ir|board|market|what will|say during)\b/gi, ' ')
+        );
+        if (cleaned) return cleaned;
+      }
+    } catch {
+      // ignore malformed URLs and fall back to generic SEC search guidance
+    }
+  }
+
+  return null;
+}
+
+function isCorporateEarningsMarket(input = {}) {
+  const text = inferMarketText(input);
+  return /(earnings|earnings call|quarterly results|quarter|revenue|guidance|investor relations|transcript|8-k|10-q|q[1-4])/i.test(text);
+}
+
 function isMacroMarket(input = {}) {
   const text = inferMarketText(input);
   return /(cpi|inflation|ppi|jobs|unemployment|gdp|fomc|fed|rates|treasury|pce|employment)/.test(text);
@@ -287,6 +351,76 @@ async function buildTeslaEarningsSourcePacket(input = {}, options = {}) {
   }
 }
 
+function buildCorporateEarningsSourcePacket(input = {}) {
+  const metadata = isObject(input.metadata) ? input.metadata : {};
+  const issuerHint = extractEarningsIssuerHint(input);
+  const sourcePacket = buildBasePacket(input);
+  const searchQuery = compactWhitespace(
+    [issuerHint, metadata.event_name, metadata.target_phrase, input.title, input.question]
+      .filter(Boolean)
+      .join(' ')
+  );
+  const secSearchUrl = `https://www.sec.gov/edgar/search/#/q=${encodeURIComponent(searchQuery || 'earnings transcript 8-K')}`;
+  const browseUrl = issuerHint
+    ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(issuerHint)}&type=8-K&owner=exclude&count=40`
+    : null;
+
+  sourcePacket.source_packet_kind = 'earnings';
+  sourcePacket.event_domain = 'corporate';
+  sourcePacket.event_type = 'earnings_call';
+  sourcePacket.market_type = 'mention';
+  sourcePacket.source_quality = 'high';
+  sourcePacket.evidence_strength = 'medium';
+  sourcePacket.event_format = 'earnings call / transcript / issuer filing';
+  sourcePacket.speaker_type = 'company management / issuer filing';
+  sourcePacket.timing_relevance = 'earnings-window dependent';
+  sourcePacket.catalyst = issuerHint ? `${issuerHint} earnings update` : 'official corporate earnings update';
+  sourcePacket.time_sensitivity = 'high';
+  sourcePacket.why_valid_under_kalshi_rules = issuerHint
+    ? `Kalshi earnings-mention markets should be grounded in ${issuerHint}'s official earnings materials, especially the issuer filing, transcript, or replay.`
+    : 'Kalshi earnings-mention markets should be grounded in the issuer’s official earnings materials, especially the 8-K, transcript, or replay.';
+  sourcePacket.reasoning_chain = [
+    issuerHint
+      ? `The board wording points to ${issuerHint}, so the packet should anchor on issuer-source discovery instead of generic commentary.`
+      : 'The board wording identifies an earnings-style mention market, so the packet should anchor on issuer-source discovery instead of generic commentary.',
+    'Official issuer filings, transcripts, and replays are the correct source family for earnings mention settlement.',
+  ];
+  sourcePacket.official_source_candidates = [
+    {
+      url: secSearchUrl,
+      type: 'sec_earnings_search',
+      label: issuerHint ? `${issuerHint} SEC earnings search` : 'SEC earnings search',
+    },
+    ...(browseUrl
+      ? [
+          {
+            url: browseUrl,
+            type: 'sec_8k_company_search',
+            label: `${issuerHint} SEC 8-K filings`,
+          },
+        ]
+      : []),
+    {
+      url: 'https://www.sec.gov/',
+      type: 'sec_home',
+      label: 'SEC home',
+    },
+  ];
+  sourcePacket.official_source_url = secSearchUrl;
+  sourcePacket.official_source_type = 'sec_earnings_search';
+  sourcePacket.unresolved_gaps = issuerHint
+    ? ['Exact filing or transcript still needs to be resolved from the issuer search results.']
+    : ['Issuer hint not resolved from the board wording yet; use the SEC search candidates to narrow the filing.'];
+  sourcePacket.research_summary = issuerHint
+    ? `${issuerHint} earnings mention packet points to official SEC source candidates.`
+    : 'Corporate earnings mention packet points to official SEC source candidates.';
+  sourcePacket.invalidation_condition = issuerHint
+    ? `If the issuer's official filing, transcript, or replay does not match the board phrase, re-run the packet.`
+    : 'If the official issuer filing or transcript does not match the board phrase, re-run the packet.';
+
+  return sourcePacket;
+}
+
 function buildMacroSourcePacket(input = {}) {
   const packet = buildBasePacket(input);
   packet.source_packet_kind = 'macro';
@@ -397,11 +531,15 @@ export async function buildOfficialSourcePacket(input = {}, options = {}) {
     return buildTeslaEarningsSourcePacket(input, options);
   }
 
+  if (isCorporateEarningsMarket(input)) {
+    return buildCorporateEarningsSourcePacket(input, options);
+  }
+
   if (isMacroMarket(input)) {
     return buildMacroSourcePacket(input);
   }
 
-  if (String(input.domain ?? '').toLowerCase() === 'mention' || /(earnings|transcript|replay|video)/.test(inferMarketText(input))) {
+  if (String(input.domain ?? '').toLowerCase() === 'mention' || /(transcript|replay|video)/.test(inferMarketText(input))) {
     return buildGenericMentionSourcePacket(input);
   }
 

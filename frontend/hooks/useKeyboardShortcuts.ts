@@ -12,7 +12,7 @@ export interface KeyboardShortcutActions {
   onClose: () => void
 
   // Filters
-  onToggleProfitable: () => void
+  onToggleFilter: () => void
 
   // Actions
   onFocusSearch: () => void
@@ -78,7 +78,7 @@ export function useKeyboardShortcuts(
 
         // Toggles
         case 'p':
-          actions.onToggleProfitable()
+          actions.onToggleFilter()
           event.preventDefault()
           break
 
@@ -129,7 +129,7 @@ export const KEYBOARD_SHORTCUTS = [
   },
   {
     category: 'Filters',
-    shortcuts: [{ keys: ['p'], description: 'Toggle profitable only' }],
+    shortcuts: [{ keys: ['p'], description: 'Toggle filters' }],
   },
   {
     category: 'Actions',

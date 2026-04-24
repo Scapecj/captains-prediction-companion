@@ -298,7 +298,7 @@ export async function enrichEventMarketInput(input = {}, options = {}) {
   const event = eventBundle?.event ?? null;
   const eventDetails = event ? parseMentionEventDetails(event) : { speaker: null, event_name: null };
   const prices = market ? buildPriceSnapshot(market) : null;
-  const boardPreview = eventBundle ? buildBoardPreview(eventBundle.markets).slice(0, 5) : [];
+  const boardPreview = eventBundle ? buildBoardPreview(eventBundle.markets) : [];
 
   const extraMetadata = {
     kalshi_event_ticker: normalizeTicker(event?.event_ticker) ?? normalizeTicker(market?.event_ticker) ?? urlContext?.tail ?? null,

@@ -27,12 +27,3 @@ export function getPortfolioWsUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}/ws/portfolios/ws`
 }
-
-/**
- * Get the API docs URL.
- */
-export function getApiDocsUrl(): string {
-  // Use the Next.js proxy path so the rendered href stays identical
-  // between server render and client hydration.
-  return '/api/docs'
-}
