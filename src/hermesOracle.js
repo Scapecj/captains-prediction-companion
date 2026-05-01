@@ -1,5 +1,6 @@
 import { buildFocusedKalshiMarketPlan, buildEventMarketPlanSummary } from './eventMarketTool.js';
 import { readHermesOraclePacket, runHermesChat, stringifyCompactJson } from './hermesRuntime.js';
+import { DEFAULT_MODEL_NAME } from './modelDefaults.js';
 
 const ACTIONABLE_RECOMMENDATIONS = new Set(['buy_yes', 'buy_no']);
 const VALID_RECOMMENDATIONS = new Set(['buy_yes', 'buy_no', 'watch', 'pass']);
@@ -428,10 +429,9 @@ export async function runHermesOracle(researchResult = {}, input = {}, options =
 
   const query = buildHermesOraclePrompt(researchResult, input, localSummary, baseBoard);
   const chatRunner = options.oracleChatRunner ?? runHermesChat;
-  const oracleProvider = options.oracleProvider ?? options.provider ?? 'copilot';
+  const oracleProvider = options.oracleProvider ?? options.provider ?? 'gemini';
   const oracleModel =
-    options.oracleModel ??
-    (oracleProvider === 'copilot' ? undefined : (options.validationModel ?? options.model));
+    options.oracleModel ?? options.validationModel ?? options.model ?? DEFAULT_MODEL_NAME;
   const hermesResult = await chatRunner(query, {
     ...options,
     provider: oracleProvider,

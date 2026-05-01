@@ -1,16 +1,13 @@
 [Unit]
 Description=CaptainLabs frontend
-After=network.target
+After=network.target captainlabs-api.service
 
 [Service]
 Type=simple
 User=deploy
 WorkingDirectory=/srv/captainlabs/frontend
-Environment=NODE_ENV=production
-Environment=PORT=3000
-Environment=BACKEND_URL=http://127.0.0.1:8000
-Environment=MCP_SERVER_URL=http://127.0.0.1:8000/mcp
-ExecStart=/usr/bin/npm run start
+EnvironmentFile=/etc/captainlabs/frontend.env
+ExecStart=/usr/bin/env npm run start
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

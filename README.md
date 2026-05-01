@@ -81,3 +81,13 @@ See [CONNECT_CHATGPT.md](./CONNECT_CHATGPT.md) for the MCP setup path.
 ## Deployment notes
 
 See [docs/deployment-vps.md](./docs/deployment-vps.md).
+
+Convenience assets for a Deck <-> VPS workflow:
+- `docs/deck-vps-workflow.md` — exact first-time setup and daily handoff commands
+- `Makefile` — one-command shortcuts for bootstrap, sync, and tmux access
+- `deploy/scripts/bootstrap-vps.sh` — bootstrap a Debian/Ubuntu VPS for prod deploy plus a resumable rsynced VPS working tree
+- `deploy/scripts/deck-to-vps.sh` — rsync a working tree from Deck to VPS
+- `deploy/scripts/vps-to-deck.sh` — rsync a working tree from VPS back to Deck
+- `deploy/nginx/captainlabs.io.http.conf.example` — HTTP-only nginx bootstrap config for pre-certbot setup
+- `deploy/env/captainlabs-api.env.example` — backend production env template
+- `deploy/env/captainlabs-frontend.env.example` — frontend production env template

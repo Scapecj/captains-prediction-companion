@@ -6,14 +6,8 @@ After=network.target
 Type=simple
 User=deploy
 WorkingDirectory=/srv/captainlabs
-Environment=NODE_ENV=production
-Environment=PORT=8000
-Environment=APP_DATA_FILE=/var/lib/captains/notes.json
-Environment=PIPELINE_STATE_FILE=/var/lib/captains/pipeline-state.json
-Environment=PIPELINE_OUTPUT_FILE=/var/lib/captains/pipeline-card-outputs.json
-Environment=BACKEND_URL=http://127.0.0.1:8000
-Environment=MCP_SERVER_URL=http://127.0.0.1:8000/mcp
-ExecStart=/usr/bin/node /srv/captainlabs/src/server.js
+EnvironmentFile=/etc/captainlabs/api.env
+ExecStart=/usr/bin/env node /srv/captainlabs/src/server.js
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

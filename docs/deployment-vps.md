@@ -41,6 +41,7 @@ Backend:
 - `APP_DATA_FILE=/var/lib/captains/notes.json` (or another writable path)
 - `PIPELINE_STATE_FILE=/var/lib/captains/pipeline-state.json`
 - `PIPELINE_OUTPUT_FILE=/var/lib/captains/pipeline-card-outputs.json`
+- `CAPTAINLABS_STATE_FILE=/var/lib/captains/captainlabs-state.json`
 - `PIPELINE_SEED_URLS` if you want a seeded market queue
 - `PIPELINE_CALENDAR_URL` and `PIPELINE_CALENDAR_LIMIT` if you want calendar seeding
 - `HERMES_COMMAND` only if overriding the Hermes binary
@@ -71,6 +72,10 @@ Keep them under `/etc/systemd/system/` on the VPS.
 Example units are in:
 - `deploy/systemd/captainlabs-api.service.example`
 - `deploy/systemd/captainlabs-frontend.service.example`
+
+Both units now read from env files:
+- `/etc/captainlabs/api.env`
+- `/etc/captainlabs/frontend.env`
 
 The backend serves `/health` and `/healthz`.
 The frontend app proxies same-origin `/api/*` to the backend, so `https://captainlabs.io/api/health` should return 200 once Nginx and both services are up.
